@@ -510,55 +510,78 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const [importText, setImportText] = useState("");
   const [importing,  setImporting]  = useState(false);
 
-  const importFromCopilot = () => {
+  const parseWithRegex = (text) => {
+    const lines = text.trim().split("\n").filter(l => l.trim() && !l.includes("---") && !l.toLowerCase().startsWith("day"));
+    const results = [];
+    const dayMap = { "mon":0, "tue":1, "wed":2, "thu":3, "fri":4 };
+    lines.forEach(line => {
+      let parts;
+      if (line.includes("|")) {
+        parts = line.split("|").map(p => p.trim()).filter(p => p);
+      } else {
+        const m = line.match(/^(\S+\s+\S+)\s+(\d+:\d+\s*[ap]m)\s+(\d+:\d+\s*[ap]m)\s+(.+)/i);
+        if (!m) return;
+        parts = [m[1], m[2], m[3], m[4]];
+      }
+      if (parts.length < 4) return;
+      const [dayDate, startStr, endStr, ...titleParts] = parts;
+      const title = titleParts.join(" ").trim();
+      const dayWord = dayDate.trim().split(/\s+/)[0].toLowerCase().slice(0,3);
+      const di = dayMap[dayWord];
+      if (di === undefined) return;
+      const parseTime = str => {
+        const m = str.trim().match(/(\d+):(\d+)\s*(am|pm)/i);
+        if (!m) return null;
+        let h = parseInt(m[1]), min = parseInt(m[2]);
+        const ap = m[3].toLowerCase();
+        if (ap === "pm" && h !== 12) h += 12;
+        if (ap === "am" && h === 12) h = 0;
+        return h * 60 + min;
+      };
+      const startMins = parseTime(startStr);
+      const endMins   = parseTime(endStr);
+      if (startMins === null || endMins === null) return;
+      const slotIndex = Math.round((startMins - 7 * 60) / 30);
+      const slots     = Math.max(1, Math.ceil((endMins - startMins) / 30));
+      if (slotIndex < 0 || slotIndex >= HOURS.length * 2) return;
+      results.push({ day: DAYS[di], slotIndex, slots, text: title });
+    });
+    return results;
+  };
+
+  const importFromCopilot = async () => {
     if (!importText.trim()) return;
     setImporting(true);
     try {
-      const lines = importText.trim().split("\n").filter(l => l.trim() && !l.includes("---") && !l.toLowerCase().includes("day |"));
-      // Start fresh — only keep manually added blocks, replace all outlook ones
+      const isLocalhost = window.location.hostname === "localhost";
+
+      // Step 1: always try regex parser first
+      let items = parseWithRegex(importText);
+
+      // Step 2: if parser got 0 results AND we're on Vercel, try AI fallback
+      if (items.length === 0 && !isLocalhost) {
+        try {
+          const resp = await callAI(`Parse this calendar data into JSON. Return ONLY a raw JSON array, no markdown:
+[{"day":"Mon","slotIndex":9,"slots":1,"text":"Meeting title"}]
+day = Mon/Tue/Wed/Thu/Fri
+slotIndex = (startHour - 7) * 2 + (startMinute >= 30 ? 1 : 0)
+slots = ceil(durationMinutes / 30)
+Data:
+${importText}`);
+          items = JSON.parse(resp.replace(/```json|```/g,"").trim());
+        } catch(e) { console.warn("AI fallback failed", e); }
+      }
+
+      if (items.length === 0) { setImporting(false); return; }
+
+      // Keep manual blocks, replace outlook blocks
       const next = {};
       Object.keys(gridBlocks).forEach(k => {
         if (gridBlocks[k].source === "manual") next[k] = gridBlocks[k];
       });
-      const dayMap = { "mon":0, "tue":1, "wed":2, "thu":3, "fri":4 };
-      lines.forEach(line => {
-        // Handle pipe-separated: Mon 5/4 | 11:30 AM | 11:55 AM | Title
-        // Also handle space-separated: Mon 5/4  11:30 AM  11:55 AM  Title
-        let parts;
-        if (line.includes("|")) {
-          parts = line.split("|").map(p => p.trim()).filter(p => p);
-        } else {
-          const m = line.match(/^(\S+\s+\S+)\s+(\d+:\d+\s*[ap]m)\s+(\d+:\d+\s*[ap]m)\s+(.+)/i);
-          if (!m) return;
-          parts = [m[1], m[2], m[3], m[4]];
-        }
-        if (parts.length < 4) return;
-        const [dayDate, startStr, endStr, ...titleParts] = parts;
-        const title = titleParts.join(" ").trim();
-        const dayWord = dayDate.trim().split(/\s+/)[0].toLowerCase().slice(0,3);
-        const di = dayMap[dayWord];
-        if (di === undefined) return;
-
-        const parseTime = str => {
-          const m = str.trim().match(/(\d+):(\d+)\s*(am|pm)/i);
-          if (!m) return null;
-          let h = parseInt(m[1]), min = parseInt(m[2]);
-          const ap = m[3].toLowerCase();
-          if (ap === "pm" && h !== 12) h += 12;
-          if (ap === "am" && h === 12) h = 0;
-          return h * 60 + min;
-        };
-
-        const startMins = parseTime(startStr);
-        const endMins   = parseTime(endStr);
-        if (startMins === null || endMins === null) return;
-
-        const slotIndex = Math.round((startMins - 7 * 60) / 30);
-        const slots     = Math.max(1, Math.ceil((endMins - startMins) / 30));
-        if (slotIndex < 0 || slotIndex >= HOURS.length * 2) return;
-
-        const k = ck(DAYS[di], slotIndex);
-        next[k] = { text: title, pid: 1, id: Date.now() + Math.random(), slots, source: "outlook" };
+      items.forEach(item => {
+        const k = ck(item.day, item.slotIndex);
+        next[k] = { text: item.text, pid: 1, id: Date.now() + Math.random(), slots: Math.max(1, item.slots||1), source: "outlook" };
       });
       setGridBlocks(next); cloudSave("tt_blocks", next);
       setShowImport(false); setImportText("");
@@ -856,8 +879,101 @@ function RetroScreen({rawNotes,setRawNotes,organized,setOrganized}) {
   );
 }
 
-// ── App Shell ─────────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
+const TOKEN_KEY   = "mp_auth_token";
+const EXPIRES_KEY = "mp_auth_expires";
+
+const isAuthed = () => {
+  try {
+    const token   = localStorage.getItem(TOKEN_KEY);
+    const expires = localStorage.getItem(EXPIRES_KEY);
+    return token === "mp_auth_v1_witronix" && expires && Date.now() < Number(expires);
+  } catch { return false; }
+};
+
+const saveAuth = (token, expires) => {
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(EXPIRES_KEY, String(expires));
+  } catch {}
+};
+
+const clearAuth = () => {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(EXPIRES_KEY);
+  } catch {}
+};
+
+function LoginScreen({ onLogin }) {
+  const [pw, setPw]         = useState("");
+  const [error, setError]   = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!pw.trim()) return;
+    setLoading(true); setError("");
+    try {
+      // On localhost, fall back to direct check so dev workflow isn't broken
+      if (window.location.hostname === "localhost") {
+        if (pw === "133799") {
+          saveAuth("mp_auth_v1_witronix", Date.now() + 7*24*60*60*1000);
+          onLogin();
+        } else {
+          setError("Incorrect password. Please try again.");
+        }
+        setLoading(false); return;
+      }
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        saveAuth(data.token, data.expires);
+        onLogin();
+      } else {
+        setError("Incorrect password. Please try again.");
+      }
+    } catch {
+      setError("Could not connect. Please try again.");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:"#F8F7F5", fontFamily:"'Georgia','Times New Roman',serif" }}>
+      <div style={{ background:"#fff", border:"1.5px solid #E5E7EB", borderRadius:16, padding:"48px 40px", width:360, boxShadow:"0 4px 24px rgba(0,0,0,0.06)" }}>
+        <div style={{ marginBottom:32, textAlign:"center" }}>
+          <div style={{ fontSize:9, letterSpacing:"0.2em", color:"#6B7280", textTransform:"uppercase", marginBottom:8 }}>Wi-Tronix</div>
+          <div style={{ fontSize:24, fontWeight:800, color:"#111827", marginBottom:6 }}>My Planner</div>
+          <div style={{ fontSize:13, color:"#9CA3AF" }}>Enter your access code to continue</div>
+        </div>
+        <input
+          type="password"
+          value={pw}
+          onChange={e => setPw(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && submit()}
+          placeholder="Access code"
+          autoFocus
+          style={{ width:"100%", fontSize:16, padding:"12px 14px", border:`1.5px solid ${error?"#EF4444":"#E5E7EB"}`, borderRadius:8, outline:"none", fontFamily:"inherit", boxSizing:"border-box", letterSpacing:"0.2em", marginBottom:12 }}
+        />
+        {error && <div style={{ fontSize:12, color:"#EF4444", marginBottom:12 }}>{error}</div>}
+        <button
+          onClick={submit}
+          disabled={loading}
+          style={{ width:"100%", padding:"12px", background:loading?"#9CA3AF":"#111827", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:loading?"not-allowed":"pointer", fontFamily:"inherit" }}>
+          {loading ? "Checking…" : "Enter →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
+  const [authed, setAuthed] = useState(isAuthed());
   const [screen,setScreen]=useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -890,6 +1006,9 @@ export default function App() {
       setSyncing(false);
     }).catch(()=>setSyncing(false));
   },[]);
+
+  // Early return AFTER all hooks
+  if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />;
 
   const screens=[
     <AnnualScreen key="a" freeform={freeform} setFreeform={setFreeform} parsed={parsed} setParsed={setParsed}/>,
@@ -949,6 +1068,7 @@ export default function App() {
                 <span style={{fontSize:10,color:"#D1D5DB",lineHeight:1.3}}>{p.label}</span>
               </div>
             ))}
+            <button onClick={()=>{clearAuth();setAuthed(false);}} style={{marginTop:12,width:"100%",padding:"6px 0",background:"none",border:"1px solid #374151",borderRadius:6,color:"#6B7280",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Sign out</button>
           </div>
         </div>
       )}
