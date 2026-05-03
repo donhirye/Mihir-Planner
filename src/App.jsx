@@ -19,7 +19,7 @@ const Q_MONTHS   = {Q1:[0,1,2],Q2:[3,4,5],Q3:[6,7,8],Q4:[9,10,11]};
 const WEEK_DATES = ["May 4","May 11","May 18","May 25","Jun 1"];
 const NAV        = ["Annual","Quarterly","Weekly Merge","Timetable","Retro"];
 const ICONS      = ["◈","⊞","⇄","⏱","✦"];
-const DAY_W      = 38;
+const DAY_W      = 96;
 const CELL_H     = 26;
 const COL_W      = 120;
 
@@ -217,7 +217,7 @@ function WeekBar({task,onUpdate,onBarDragStart,onBarDragEnd}) {
   };
   return (
     <div draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData("movedTaskId",String(task.id));e.dataTransfer.setData("action","moveBar");onBarDragStart&&onBarDragStart(task.id);}} onDragEnd={()=>onBarDragEnd&&onBarDragEnd()}
-      style={{position:"absolute",left,top:3,width,height:20,background:p?.color,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"space-between",overflow:"hidden",zIndex:10,boxShadow:"0 1px 4px rgba(0,0,0,0.2)",userSelect:"none",cursor:"grab",opacity:0.82}}>
+      style={{position:"absolute",left,top:20,width,height:26,background:p?.color,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"space-between",overflow:"hidden",zIndex:10,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",userSelect:"none",cursor:"grab",opacity:0.9}}>
       <div onMouseDown={e=>resize("left",e)} style={{width:10,height:"100%",cursor:"ew-resize",background:"rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:7,color:"#fff"}}>◂</span></div>
       <span style={{fontSize:9,color:"#fff",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textAlign:"center",padding:"0 2px"}}>{task.text.length>20?task.text.slice(0,18)+"…":task.text}</span>
       <div onMouseDown={e=>resize("right",e)} style={{width:10,height:"100%",cursor:"ew-resize",background:"rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:7,color:"#fff"}}>▸</span></div>
@@ -265,7 +265,7 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
     const cells=Array.from({length:Math.ceil((off+dim)/7)*7},(_,i)=>{const d=i-off+1;return(d>=1&&d<=dim)?d:null;});
     const rows=[]; for(let i=0;i<cells.length;i+=7) rows.push(cells.slice(i,i+7)); return rows;
   };
-  const ROW_H=34;
+  const ROW_H=52;
 
   return (
     <div>
@@ -275,6 +275,8 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
         <span style={{fontSize:16,fontWeight:800,color:"#111827"}}>{ql} {YEAR}</span>
         <button onClick={()=>setQuarter(q=>Math.min(3,q+1))} style={nb}>▶</button>
       </div>
+
+      {/* Quarter-level unscheduled tasks */}
       {qLevel.length>0&&(
         <div onDragOver={e=>{e.preventDefault();setDropTarget("qzone");}} onDragLeave={()=>setDropTarget(null)}
           onDrop={e=>{e.preventDefault();const a=e.dataTransfer.getData("action"),id=e.dataTransfer.getData("movedTaskId");if(a==="moveBar"&&id)unschedule(all.find(t=>t.id===Number(id))||{id:Number(id)});setDropTarget(null);setDragBarId(null);}}
@@ -286,33 +288,46 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                 style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:7,background:p?.light,border:`1.5px solid ${p?.color}44`,cursor:"grab",userSelect:"none",opacity:dragItem?.id===task.id?0.35:1}}>
                 <span style={{fontSize:11,color:p?.color,opacity:0.5}}>⠿</span>
                 <span style={{fontSize:12,color:p?.color}}>{task.text}</span>
-                <Pill pid={task.pid} small/>
                 <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);const w={...mergeTD};Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==task.id);});updM(w);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,marginLeft:2}}>×</button>
               </div>
             );})}
           </div>
         </div>
       )}
-      <div style={{display:"flex",flexDirection:"column",gap:20}}>
+
+      {/* 3 months — each full width, calendar on top, tasks below */}
+      <div style={{display:"flex",flexDirection:"column",gap:24}}>
         {qm.map(month=>{
           const rows=getRows(month), ua=unassigned(month), asgn=assigned(month);
+          const totalTasks=all.filter(t=>t.month===month).length;
           return (
-            <div key={month} style={{background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:12,overflow:"hidden"}}>
-              <div style={{background:"#111827",padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{fontSize:14,fontWeight:800,color:"#F9FAFB"}}>{MONTH_FULL[month]}</div>
-                <div style={{fontSize:10,color:"#6B7280"}}>{all.filter(t=>t.month===month).length} tasks · {asgn.length} scheduled</div>
+            <div key={month} style={{background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+
+              {/* Month header */}
+              <div style={{background:"#111827",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{fontSize:16,fontWeight:800,color:"#F9FAFB",letterSpacing:"0.02em"}}>{MONTH_FULL[month]}</div>
+                <div style={{display:"flex",gap:16,alignItems:"center"}}>
+                  <span style={{fontSize:11,color:"#9CA3AF"}}>{totalTasks} tasks · {asgn.length} scheduled</span>
+                </div>
               </div>
-              <div style={{display:"flex"}}>
-                <div style={{flex:"0 0 300px",padding:"10px 12px",borderRight:"1px solid #F3F4F6"}}>
-                  <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:1,marginBottom:4}}>
-                    {DAYS_S.map((d,i)=><div key={i} style={{textAlign:"center",fontSize:9,color:"#9CA3AF",fontWeight:700,width:DAY_W}}>{d}</div>)}
-                  </div>
+
+              {/* Calendar — full width, generous sizing */}
+              <div style={{padding:"16px 20px",borderBottom:"1px solid #F3F4F6",overflowX:"auto"}}>
+                {/* Day headers */}
+                <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:2,marginBottom:4}}>
+                  {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d,i)=>(
+                    <div key={i} style={{textAlign:"center",fontSize:10,color:"#9CA3AF",fontWeight:700,padding:"2px 0"}}>{d}</div>
+                  ))}
+                </div>
+                {/* Week rows */}
+                <div>
                   {rows.map((week,wi)=>{
                     const fv=week.find(d=>d!==null), wl=fv?getWeekLabel(YEAR,month,fv):null;
                     const isOver=(dropTarget?.month===month&&dropTarget?.weekLabel===wl)&&(dragItem||dragBarId);
                     const wat=wl?asgn.filter(t=>t.weekAssigned===wl):[];
+                    const rowWidth=7*DAY_W+6*2;
                     return (
-                      <div key={wi} style={{position:"relative",marginBottom:2}}
+                      <div key={wi} style={{position:"relative",marginBottom:3}}
                         onDragOver={e=>{e.preventDefault();if(wl)setDropTarget({month,weekLabel:wl});}}
                         onDragLeave={()=>setDropTarget(null)}
                         onDrop={e=>{
@@ -321,15 +336,15 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                           if(wl){if(a==="moveBar"&&id)moveBar(Number(id),wl);else if(dragItem)schedule(dragItem,wl,month);}
                           setDropTarget(null);setDragItem(null);setDragBarId(null);
                         }}>
-                        <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:1,height:ROW_H,background:isOver?"#EFF6FF":"transparent",border:isOver?"2px dashed #2563EB":"2px solid transparent",borderRadius:6,padding:"2px",boxSizing:"border-box",position:"relative",zIndex:2}}>
+                        <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:2,height:ROW_H,background:isOver?"#EFF6FF":"#FAFAFA",border:isOver?"2px dashed #2563EB":"1.5px solid #F0F0EE",borderRadius:8,padding:"2px",boxSizing:"border-box",position:"relative",zIndex:2,width:rowWidth}}>
                           {week.map((d,di)=>(
-                            <div key={di} style={{height:"100%",padding:"2px 3px",background:d?"#FAFAFA":"transparent",border:d?"1px solid #F3F4F6":"none",borderRadius:3,display:"flex",flexDirection:"column"}}>
-                              {d&&<div style={{fontSize:9,color:"#374151",fontWeight:700,zIndex:3,position:"relative"}}>{d}</div>}
+                            <div key={di} style={{height:"100%",padding:"3px 4px",background:d?"#fff":"transparent",border:d?"1px solid #E5E7EB":"none",borderRadius:5,display:"flex",flexDirection:"column"}}>
+                              {d&&<div style={{fontSize:11,color:"#374151",fontWeight:700,zIndex:3,position:"relative",lineHeight:1}}>{d}</div>}
                             </div>
                           ))}
                         </div>
                         {wat.map(task=>(
-                          <div key={task.id} style={{position:"absolute",top:0,left:0,width:"100%",height:ROW_H,pointerEvents:"none",zIndex:1}}>
+                          <div key={task.id} style={{position:"absolute",top:0,left:0,width:rowWidth,height:ROW_H,pointerEvents:"none",zIndex:1}}>
                             <div style={{position:"relative",height:ROW_H,pointerEvents:"all"}}>
                               <WeekBar task={task} onUpdate={u=>updateBar(task.id,u)} onBarDragStart={id=>setDragBarId(id)} onBarDragEnd={()=>setDragBarId(null)}/>
                             </div>
@@ -339,52 +354,62 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                     );
                   })}
                 </div>
-                <div style={{flex:1,padding:"12px 14px"}}>
-                  {ua.length>0&&(
-                    <div style={{marginBottom:12}}>
-                      <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>DRAG TO SCHEDULE</div>
+              </div>
+
+              {/* Tasks below calendar */}
+              <div style={{padding:"14px 20px"}}>
+                {/* Unscheduled tasks to drag */}
+                {ua.length>0&&(
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",color:"#9CA3AF",marginBottom:8}}>DRAG TO SCHEDULE ↑</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                       {ua.map(task=>{const p=gp(task.pid);return(
                         <div key={task.id} draggable onDragStart={e=>{setDragItem(task);e.dataTransfer.setData("action","newTask");}} onDragEnd={()=>{setDragItem(null);setDropTarget(null);}}
-                          style={{display:"flex",alignItems:"center",gap:6,padding:"6px 9px",marginBottom:4,borderRadius:7,background:p?.light,border:`1.5px solid ${p?.color}44`,cursor:"grab",userSelect:"none",opacity:dragItem?.id===task.id?0.35:1}}>
-                          <span style={{fontSize:12,color:p?.color,opacity:0.5}}>⠿</span>
-                          <span style={{fontSize:12,color:p?.color,flex:1,lineHeight:1.3}}>{task.text}</span>
-                          <Pill pid={task.pid} small/>
-                          <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);const w={...mergeTD};Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==task.id);});updM(w);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1}}>×</button>
+                          style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:p?.light,border:`1.5px solid ${p?.color}55`,cursor:"grab",userSelect:"none",opacity:dragItem?.id===task.id?0.35:1}}>
+                          <div style={{width:8,height:8,borderRadius:"50%",background:p?.color,flexShrink:0}}/>
+                          <span style={{fontSize:12,color:p?.color,fontWeight:500}}>{task.text}</span>
+                          <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);const w={...mergeTD};Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==task.id);});updM(w);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,marginLeft:2}}>×</button>
                         </div>
                       );})}
                     </div>
-                  )}
-                  <div style={{display:"flex",gap:5,marginBottom:8}}>
-                    <input id={`q-add-${month}`} placeholder="Add task…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
-                      onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const apid=PRIORITIES[0].id;const ni={text:e.target.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);e.target.value="";}}}/>
-                    <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const apid=PRIORITIES[0].id;const ni={text:inp.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:10,padding:"4px 8px"}}>+</button>
                   </div>
-                  {asgn.length>0&&(
-                    <div>
-                      <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>SCHEDULED</div>
-                      {asgn.map(task=>{const p=gp(task.pid),sd=task.startDay??0,ed=task.endDay??4;return(
+                )}
+
+                {/* Scheduled tasks summary */}
+                {asgn.length>0&&(
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",color:"#9CA3AF",marginBottom:8}}>SCHEDULED</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {asgn.map(task=>{const p=gp(task.pid);return(
                         <div key={task.id} draggable onDragStart={e=>{setDragBarId(task.id);e.dataTransfer.setData("action","moveBar");e.dataTransfer.setData("movedTaskId",String(task.id));}} onDragEnd={()=>{setDragBarId(null);setDropTarget(null);}}
-                          style={{display:"flex",alignItems:"center",gap:6,padding:"6px 9px",marginBottom:4,borderRadius:7,background:"#F9FAFB",border:"1px solid #E5E7EB",cursor:"grab"}}>
+                          style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:8,background:"#F9FAFB",border:"1px solid #E5E7EB",cursor:"grab"}}>
                           <span style={{fontSize:10,color:"#10B981"}}>✓</span>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:11,color:"#6B7280",textDecoration:"line-through"}}>{task.text}</div>
-                            <div style={{fontSize:9,color:"#9CA3AF"}}>wk {task.weekAssigned} · {ed-sd===4?"Full week":DAYS.slice(sd,ed+1).join("–")}</div>
-                          </div>
-                          <Pill pid={task.pid} small/>
-                          <button onClick={()=>unschedule(task)} style={{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:14,padding:0}}>×</button>
+                          <span style={{fontSize:11,color:"#6B7280",textDecoration:"line-through"}}>{task.text}</span>
+                          <span style={{fontSize:9,color:"#9CA3AF"}}>wk {task.weekAssigned}</span>
+                          <button onClick={()=>unschedule(task)} style={{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:13,padding:0,marginLeft:2}}>×</button>
                         </div>
                       );})}
                     </div>
-                  )}
+                  </div>
+                )}
+
+                {/* Add task input */}
+                <div style={{display:"flex",gap:6}}>
+                  <input id={`q-add-${month}`} placeholder="Add task to this month…" style={{flex:1,fontSize:12,padding:"6px 10px",border:"1px solid #E5E7EB",borderRadius:8,outline:"none",fontFamily:"inherit",color:"#374151"}}
+                    onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const apid=PRIORITIES[0].id;const ni={text:e.target.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);e.target.value="";}}}/>
+                  <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const apid=PRIORITIES[0].id;const ni={text:inp.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:11,padding:"6px 14px"}}>+ Add</button>
                 </div>
               </div>
+
             </div>
           );
         })}
       </div>
+
+      {/* Unschedule drop zone */}
       <div onDragOver={e=>{e.preventDefault();setDropTarget("ub");}} onDragLeave={()=>setDropTarget(null)}
         onDrop={e=>{e.preventDefault();const a=e.dataTransfer.getData("action"),id=e.dataTransfer.getData("movedTaskId");if(a==="moveBar"&&id){const t=all.find(t=>t.id===Number(id));if(t)unschedule(t);}setDropTarget(null);setDragBarId(null);}}
-        style={{marginTop:16,padding:"12px",borderRadius:10,textAlign:"center",background:dropTarget==="ub"?"#FEF2F2":"#FAFAF8",border:dropTarget==="ub"?"2px dashed #DC2626":"1.5px dashed #E5E7EB",fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>
+        style={{marginTop:16,padding:"14px",borderRadius:10,textAlign:"center",background:dropTarget==="ub"?"#FEF2F2":"#FAFAF8",border:dropTarget==="ub"?"2px dashed #DC2626":"1.5px dashed #E5E7EB",fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>
         ↓ Drop a scheduled bar here to unschedule it
       </div>
     </div>
@@ -405,7 +430,6 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
   const [buEditVal,setBuEditVal]=useState("");
   const wk=WEEK_DATES[week];
   const td=mergeTD[wk]||[], bu=bottomUp[wk]||[];
-  const all=[...td,...bu.filter(i=>!i.done)];
 
   const [buAiErr,setBuAiErr]=useState(false);
   const addTD=()=>{
@@ -489,6 +513,7 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
           {bu.length>0&&(
             <div style={{marginTop:12}}>
               <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>PARSED TASKS</div>
+              <div style={{maxHeight:400,overflowY:"auto",paddingRight:4}}>
               {bu.map(item=>{const isEd=buEditId===item.id;return(
                 <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",marginBottom:3,borderRadius:6,background:item.done?"#F9FAFB":"#F8FAFF",border:`1px solid ${item.done?"#E5E7EB":"#DBEAFE"}`}}>
                   <input type="checkbox" checked={!!item.done} onChange={()=>toggleBU(item.id)} style={{cursor:"pointer",flexShrink:0}}/>
@@ -506,6 +531,7 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
                   )}
                 </div>
               );})}
+              </div>
               <div style={{display:"flex",gap:6,marginTop:8}}>
                 <input id={`bu-add-${wk}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
                   onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const ni={text:e.target.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[...bu,ni]};setBottomUp(n);cloudSave("merge_bu",n);e.target.value="";}}}/>
@@ -524,26 +550,6 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
           )}
         </div>
       </div>
-      {all.length>0&&(
-        <div style={{marginTop:14,background:"#F8FAFF",border:"1.5px solid #DBEAFE",borderRadius:10,padding:"16px 18px"}}>
-          <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",color:"#1D4ED8",marginBottom:10}}>THIS WEEK'S PLAN — {wk}</div>
-          {all.map(item=>{const p=gp(item.pid),isEd=editId===item.id;return(
-            <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid #E0E7FF"}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:p?.color,flexShrink:0}}/>
-              {isEd?(
-                <div style={{display:"flex",gap:6,flex:1,alignItems:"center"}}>
-                  <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEdit(item);if(e.key==="Escape")setEditId(null);}} style={{flex:1,fontSize:12,padding:"4px 8px",border:`1.5px solid ${p?.color||"#2563EB"}`,borderRadius:5,outline:"none",fontFamily:"inherit"}}/>
-                  <button onClick={()=>saveEdit(item)} style={{...bd,fontSize:10,padding:"3px 8px"}}>✓</button>
-                  <button onClick={()=>setEditId(null)} style={{...bg,fontSize:10,padding:"3px 8px"}}>✕</button>
-                </div>
-              ):(
-                <span onClick={()=>{setEditId(item.id);setEditVal(item.text);}} style={{fontSize:13,flex:1,color:"#1e3a8a",cursor:"text"}}>{item.text}</span>
-              )}
-              {!isEd&&<button onClick={()=>delItem(item)} style={{background:"none",border:"none",cursor:"pointer",color:"#CBD5E1",fontSize:15,padding:0,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color="#EF4444"} onMouseLeave={e=>e.currentTarget.style.color="#CBD5E1"}>×</button>}
-            </div>
-          );})}
-        </div>
-      )}
     </div>
   );
 }
