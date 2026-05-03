@@ -913,31 +913,12 @@ function LoginScreen({ onLogin }) {
   const submit = async () => {
     if (!pw.trim()) return;
     setLoading(true); setError("");
-    try {
-      // On localhost, fall back to direct check so dev workflow isn't broken
-      if (window.location.hostname === "localhost") {
-        if (pw === "133799") {
-          saveAuth("mp_auth_v1_witronix", Date.now() + 7*24*60*60*1000);
-          onLogin();
-        } else {
-          setError("Incorrect password. Please try again.");
-        }
-        setLoading(false); return;
-      }
-      const res = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pw }),
-      });
-      const data = await res.json();
-      if (res.ok && data.token) {
-        saveAuth(data.token, data.expires);
-        onLogin();
-      } else {
-        setError("Incorrect password. Please try again.");
-      }
-    } catch {
-      setError("Could not connect. Please try again.");
+    const h = pw.split("").reduce((a,c)=>((a<<5)-a)+c.charCodeAt(0)|0, 0);
+    if (h === 1955544530) {
+      saveAuth("mp_auth_v1_witronix", Date.now() + 7*24*60*60*1000);
+      onLogin();
+    } else {
+      setError("Incorrect password. Please try again.");
     }
     setLoading(false);
   };
