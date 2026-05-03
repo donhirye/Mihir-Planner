@@ -19,7 +19,7 @@ const Q_MONTHS   = {Q1:[0,1,2],Q2:[3,4,5],Q3:[6,7,8],Q4:[9,10,11]};
 const WEEK_DATES = ["May 4","May 11","May 18","May 25","Jun 1"];
 const NAV        = ["Annual","Quarterly","Weekly Merge","Timetable","Retro"];
 const ICONS      = ["◈","⊞","⇄","⏱","✦"];
-const DAY_W      = 96;
+const DAY_W      = 38;
 const CELL_H     = 26;
 const COL_W      = 120;
 
@@ -207,17 +207,18 @@ function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
 function WeekBar({task,onUpdate,onBarDragStart,onBarDragEnd}) {
   const p=gp(task.pid);
   const sd=task.startDay??0, ed=task.endDay??4;
-  const left=sd*DAY_W, width=(ed-sd+1)*DAY_W-4;
+  const CELL=DAY_W+2; // cell width + gap
+  const left=sd*CELL, width=(ed-sd+1)*CELL-2-4; // -2 removes trailing gap, -4 for padding
   const resize=(side,e)=>{
     e.preventDefault(); e.stopPropagation();
     const sx=e.clientX, os=sd, oe=ed;
-    const mv=mv2=>{const d=Math.round((mv2.clientX-sx)/DAY_W); side==="left"?onUpdate({startDay:Math.max(0,Math.min(os+d,oe)),endDay:oe}):onUpdate({startDay:os,endDay:Math.min(4,Math.max(oe+d,os))});};
+    const mv=mv2=>{const d=Math.round((mv2.clientX-sx)/CELL); side==="left"?onUpdate({startDay:Math.max(0,Math.min(os+d,oe)),endDay:oe}):onUpdate({startDay:os,endDay:Math.min(4,Math.max(oe+d,os))});};
     const up=()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);};
     window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
   };
   return (
     <div draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData("movedTaskId",String(task.id));e.dataTransfer.setData("action","moveBar");onBarDragStart&&onBarDragStart(task.id);}} onDragEnd={()=>onBarDragEnd&&onBarDragEnd()}
-      style={{position:"absolute",left,top:20,width,height:26,background:p?.color,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"space-between",overflow:"hidden",zIndex:10,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",userSelect:"none",cursor:"grab",opacity:0.9}}>
+      style={{position:"absolute",left,top:16,width,height:20,background:p?.color,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"space-between",overflow:"hidden",zIndex:10,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",userSelect:"none",cursor:"grab",opacity:0.9}}>
       <div onMouseDown={e=>resize("left",e)} style={{width:10,height:"100%",cursor:"ew-resize",background:"rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:7,color:"#fff"}}>◂</span></div>
       <span style={{fontSize:9,color:"#fff",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textAlign:"center",padding:"0 2px"}}>{task.text.length>20?task.text.slice(0,18)+"…":task.text}</span>
       <div onMouseDown={e=>resize("right",e)} style={{width:10,height:"100%",cursor:"ew-resize",background:"rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:7,color:"#fff"}}>▸</span></div>
@@ -241,7 +242,7 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
   const updM=n=>{setMergeTD(n);cloudSave("merge_td",n);};
 
   const schedule=(item,wl,month)=>{
-    const n={...parsed}; const mu=item.month===-1&&month!==undefined?{month}:{};
+    const n={...parsed}; const mu=month!==undefined?{month}:{};
     PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].map(t=>t.id===item.id?{...t,weekAssigned:wl,startDay:0,endDay:4,...mu}:t);});
     updP(n);
     const w={...mergeTD}; if(!(w[wl]||[]).find(e=>e.id===item.id)) w[wl]=[...(w[wl]||[]),{text:item.text,pid:item.pid,id:item.id,fromAnnual:true}];
@@ -251,11 +252,12 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
     const n={...parsed}; PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].map(t=>t.id===item.id?{...t,weekAssigned:null,startDay:0,endDay:4}:t);}); updP(n);
     const w={...mergeTD}; Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==item.id);}); updM(w);
   };
-  const moveBar=(tid,wl)=>{
+  const moveBar=(tid,wl,newMonth)=>{
     const task=all.find(t=>t.id===tid); if(!task) return;
     const w={...mergeTD}; if(task.weekAssigned) w[task.weekAssigned]=(w[task.weekAssigned]||[]).filter(t=>t.id!==tid);
     if(!(w[wl]||[]).find(e=>e.id===tid)) w[wl]=[...(w[wl]||[]),{text:task.text,pid:task.pid,id:tid,fromAnnual:true}]; updM(w);
-    const n={...parsed}; PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].map(t=>t.id===tid?{...t,weekAssigned:wl,startDay:0,endDay:4}:t);}); updP(n);
+    const mu=newMonth!==undefined?{month:newMonth}:{};
+    const n={...parsed}; PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].map(t=>t.id===tid?{...t,weekAssigned:wl,startDay:0,endDay:4,...mu}:t);}); updP(n);
   };
   const updateBar=(tid,updates)=>{
     const n={...parsed}; PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].map(t=>t.id===tid?{...t,...updates}:t);}); updP(n);
@@ -270,6 +272,8 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
   return (
     <div>
       <SecHead title="Quarterly Calendar" sub="Drag tasks onto a week · Resize bar ends · Drag bar to move"/>
+
+      {/* Quarter navigator */}
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
         <button onClick={()=>setQuarter(q=>Math.max(0,q-1))} style={nb}>◀</button>
         <span style={{fontSize:16,fontWeight:800,color:"#111827"}}>{ql} {YEAR}</span>
@@ -295,109 +299,90 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
         </div>
       )}
 
-      {/* 3 months — each full width, calendar on top, tasks below */}
-      <div style={{display:"flex",flexDirection:"column",gap:24}}>
+      {/* 3 months — side by side columns, calendar on top, tasks below */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16,alignItems:"start"}}>
         {qm.map(month=>{
           const rows=getRows(month), ua=unassigned(month), asgn=assigned(month);
-          const totalTasks=all.filter(t=>t.month===month).length;
           return (
-            <div key={month} style={{background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+            <div key={month} style={{background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:12,overflow:"hidden"}}>
 
               {/* Month header */}
-              <div style={{background:"#111827",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{fontSize:16,fontWeight:800,color:"#F9FAFB",letterSpacing:"0.02em"}}>{MONTH_FULL[month]}</div>
-                <div style={{display:"flex",gap:16,alignItems:"center"}}>
-                  <span style={{fontSize:11,color:"#9CA3AF"}}>{totalTasks} tasks · {asgn.length} scheduled</span>
-                </div>
+              <div style={{background:"#111827",padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{fontSize:13,fontWeight:800,color:"#F9FAFB"}}>{MONTH_FULL[month]}</div>
+                <div style={{fontSize:9,color:"#6B7280"}}>{all.filter(t=>t.month===month).length} tasks · {asgn.length} sched</div>
               </div>
 
-              {/* Calendar — full width, generous sizing */}
-              <div style={{padding:"16px 20px",borderBottom:"1px solid #F3F4F6",overflowX:"auto"}}>
-                {/* Day headers */}
-                <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:2,marginBottom:4}}>
-                  {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d,i)=>(
-                    <div key={i} style={{textAlign:"center",fontSize:10,color:"#9CA3AF",fontWeight:700,padding:"2px 0"}}>{d}</div>
-                  ))}
+              {/* Calendar */}
+              <div style={{padding:"10px 10px 8px",borderBottom:"1px solid #F3F4F6",overflowX:"auto"}}>
+                <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:2,marginBottom:3}}>
+                  {DAYS_S.map((d,i)=><div key={i} style={{textAlign:"center",fontSize:9,color:"#9CA3AF",fontWeight:700,width:DAY_W}}>{d}</div>)}
                 </div>
-                {/* Week rows */}
-                <div>
-                  {rows.map((week,wi)=>{
-                    const fv=week.find(d=>d!==null), wl=fv?getWeekLabel(YEAR,month,fv):null;
-                    const isOver=(dropTarget?.month===month&&dropTarget?.weekLabel===wl)&&(dragItem||dragBarId);
-                    const wat=wl?asgn.filter(t=>t.weekAssigned===wl):[];
-                    const rowWidth=7*DAY_W+6*2;
-                    return (
-                      <div key={wi} style={{position:"relative",marginBottom:3}}
-                        onDragOver={e=>{e.preventDefault();if(wl)setDropTarget({month,weekLabel:wl});}}
-                        onDragLeave={()=>setDropTarget(null)}
-                        onDrop={e=>{
-                          e.preventDefault();
-                          const a=e.dataTransfer.getData("action"),id=e.dataTransfer.getData("movedTaskId");
-                          if(wl){if(a==="moveBar"&&id)moveBar(Number(id),wl);else if(dragItem)schedule(dragItem,wl,month);}
-                          setDropTarget(null);setDragItem(null);setDragBarId(null);
-                        }}>
-                        <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:2,height:ROW_H,background:isOver?"#EFF6FF":"#FAFAFA",border:isOver?"2px dashed #2563EB":"1.5px solid #F0F0EE",borderRadius:8,padding:"2px",boxSizing:"border-box",position:"relative",zIndex:2,width:rowWidth}}>
-                          {week.map((d,di)=>(
-                            <div key={di} style={{height:"100%",padding:"3px 4px",background:d?"#fff":"transparent",border:d?"1px solid #E5E7EB":"none",borderRadius:5,display:"flex",flexDirection:"column"}}>
-                              {d&&<div style={{fontSize:11,color:"#374151",fontWeight:700,zIndex:3,position:"relative",lineHeight:1}}>{d}</div>}
-                            </div>
-                          ))}
-                        </div>
-                        {wat.map(task=>(
-                          <div key={task.id} style={{position:"absolute",top:0,left:0,width:rowWidth,height:ROW_H,pointerEvents:"none",zIndex:1}}>
-                            <div style={{position:"relative",height:ROW_H,pointerEvents:"all"}}>
-                              <WeekBar task={task} onUpdate={u=>updateBar(task.id,u)} onBarDragStart={id=>setDragBarId(id)} onBarDragEnd={()=>setDragBarId(null)}/>
-                            </div>
+                {rows.map((week,wi)=>{
+                  const fv=week.find(d=>d!==null), wl=fv?getWeekLabel(YEAR,month,fv):null;
+                  const isOver=(dropTarget?.month===month&&dropTarget?.weekLabel===wl)&&(dragItem||dragBarId);
+                  const wat=wl?asgn.filter(t=>t.weekAssigned===wl):[];
+                  const rowWidth=7*DAY_W+6*2;
+                  return (
+                    <div key={wi} style={{position:"relative",marginBottom:2}}
+                      onDragOver={e=>{e.preventDefault();if(wl)setDropTarget({month,weekLabel:wl});}}
+                      onDragLeave={()=>setDropTarget(null)}
+                      onDrop={e=>{
+                        e.preventDefault();
+                        const a=e.dataTransfer.getData("action"),id=e.dataTransfer.getData("movedTaskId");
+                        if(wl){if(a==="moveBar"&&id)moveBar(Number(id),wl,month);else if(dragItem)schedule(dragItem,wl,month);}
+                        setDropTarget(null);setDragItem(null);setDragBarId(null);
+                      }}>
+                      <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:2,height:ROW_H,background:isOver?"#EFF6FF":"#FAFAFA",border:isOver?"2px dashed #2563EB":"1.5px solid #F0F0EE",borderRadius:6,padding:"2px",boxSizing:"border-box",position:"relative",zIndex:2,width:rowWidth}}>
+                        {week.map((d,di)=>(
+                          <div key={di} style={{height:"100%",padding:"2px 3px",background:d?"#fff":"transparent",border:d?"1px solid #E5E7EB":"none",borderRadius:3,display:"flex",flexDirection:"column"}}>
+                            {d&&<div style={{fontSize:10,color:"#374151",fontWeight:700,zIndex:3,position:"relative",lineHeight:1}}>{d}</div>}
                           </div>
                         ))}
                       </div>
-                    );
-                  })}
-                </div>
+                      {wat.map(task=>(
+                        <div key={task.id} style={{position:"absolute",top:0,left:0,width:rowWidth,height:ROW_H,pointerEvents:"none",zIndex:1}}>
+                          <div style={{position:"relative",height:ROW_H,pointerEvents:"all"}}>
+                            <WeekBar task={task} onUpdate={u=>updateBar(task.id,u)} onBarDragStart={id=>setDragBarId(id)} onBarDragEnd={()=>setDragBarId(null)}/>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Tasks below calendar */}
-              <div style={{padding:"14px 20px"}}>
-                {/* Unscheduled tasks to drag */}
+              <div style={{padding:"10px 10px"}}>
                 {ua.length>0&&(
-                  <div style={{marginBottom:12}}>
-                    <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",color:"#9CA3AF",marginBottom:8}}>DRAG TO SCHEDULE ↑</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                      {ua.map(task=>{const p=gp(task.pid);return(
-                        <div key={task.id} draggable onDragStart={e=>{setDragItem(task);e.dataTransfer.setData("action","newTask");}} onDragEnd={()=>{setDragItem(null);setDropTarget(null);}}
-                          style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:p?.light,border:`1.5px solid ${p?.color}55`,cursor:"grab",userSelect:"none",opacity:dragItem?.id===task.id?0.35:1}}>
-                          <div style={{width:8,height:8,borderRadius:"50%",background:p?.color,flexShrink:0}}/>
-                          <span style={{fontSize:12,color:p?.color,fontWeight:500}}>{task.text}</span>
-                          <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);const w={...mergeTD};Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==task.id);});updM(w);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,marginLeft:2}}>×</button>
-                        </div>
-                      );})}
-                    </div>
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>DRAG TO SCHEDULE ↑</div>
+                    {ua.map(task=>{const p=gp(task.pid);return(
+                      <div key={task.id} draggable onDragStart={e=>{setDragItem(task);e.dataTransfer.setData("action","newTask");}} onDragEnd={()=>{setDragItem(null);setDropTarget(null);}}
+                        style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",marginBottom:3,borderRadius:6,background:p?.light,border:`1.5px solid ${p?.color}44`,cursor:"grab",userSelect:"none",opacity:dragItem?.id===task.id?0.35:1}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:p?.color,flexShrink:0}}/>
+                        <span style={{fontSize:11,color:p?.color,flex:1,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.text}</span>
+                        <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);const w={...mergeTD};Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==task.id);});updM(w);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:12,padding:0,lineHeight:1,flexShrink:0}}>×</button>
+                      </div>
+                    );})}
                   </div>
                 )}
-
-                {/* Scheduled tasks summary */}
                 {asgn.length>0&&(
-                  <div style={{marginBottom:12}}>
-                    <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.12em",color:"#9CA3AF",marginBottom:8}}>SCHEDULED</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                      {asgn.map(task=>{const p=gp(task.pid);return(
-                        <div key={task.id} draggable onDragStart={e=>{setDragBarId(task.id);e.dataTransfer.setData("action","moveBar");e.dataTransfer.setData("movedTaskId",String(task.id));}} onDragEnd={()=>{setDragBarId(null);setDropTarget(null);}}
-                          style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:8,background:"#F9FAFB",border:"1px solid #E5E7EB",cursor:"grab"}}>
-                          <span style={{fontSize:10,color:"#10B981"}}>✓</span>
-                          <span style={{fontSize:11,color:"#6B7280",textDecoration:"line-through"}}>{task.text}</span>
-                          <span style={{fontSize:9,color:"#9CA3AF"}}>wk {task.weekAssigned}</span>
-                          <button onClick={()=>unschedule(task)} style={{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:13,padding:0,marginLeft:2}}>×</button>
-                        </div>
-                      );})}
-                    </div>
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>SCHEDULED</div>
+                    {asgn.map(task=>{return(
+                      <div key={task.id} draggable onDragStart={e=>{setDragBarId(task.id);e.dataTransfer.setData("action","moveBar");e.dataTransfer.setData("movedTaskId",String(task.id));}} onDragEnd={()=>{setDragBarId(null);setDropTarget(null);}}
+                        style={{display:"flex",alignItems:"center",gap:5,padding:"4px 7px",marginBottom:3,borderRadius:5,background:"#F9FAFB",border:"1px solid #E5E7EB",cursor:"grab"}}>
+                        <span style={{fontSize:9,color:"#10B981"}}>✓</span>
+                        <span style={{fontSize:10,color:"#9CA3AF",textDecoration:"line-through",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.text}</span>
+                        <button onClick={()=>unschedule(task)} style={{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:12,padding:0,flexShrink:0}}>×</button>
+                      </div>
+                    );})}
                   </div>
                 )}
-
-                {/* Add task input */}
-                <div style={{display:"flex",gap:6}}>
-                  <input id={`q-add-${month}`} placeholder="Add task to this month…" style={{flex:1,fontSize:12,padding:"6px 10px",border:"1px solid #E5E7EB",borderRadius:8,outline:"none",fontFamily:"inherit",color:"#374151"}}
+                <div style={{display:"flex",gap:4}}>
+                  <input id={`q-add-${month}`} placeholder="Add task…" style={{flex:1,fontSize:11,padding:"5px 7px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
                     onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const apid=PRIORITIES[0].id;const ni={text:e.target.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);e.target.value="";}}}/>
-                  <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const apid=PRIORITIES[0].id;const ni={text:inp.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:11,padding:"6px 14px"}}>+ Add</button>
+                  <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const apid=PRIORITIES[0].id;const ni={text:inp.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);inp.value='';}}} style={{...bd,fontSize:10,padding:"5px 10px"}}>+</button>
                 </div>
               </div>
 
@@ -409,7 +394,7 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
       {/* Unschedule drop zone */}
       <div onDragOver={e=>{e.preventDefault();setDropTarget("ub");}} onDragLeave={()=>setDropTarget(null)}
         onDrop={e=>{e.preventDefault();const a=e.dataTransfer.getData("action"),id=e.dataTransfer.getData("movedTaskId");if(a==="moveBar"&&id){const t=all.find(t=>t.id===Number(id));if(t)unschedule(t);}setDropTarget(null);setDragBarId(null);}}
-        style={{marginTop:16,padding:"14px",borderRadius:10,textAlign:"center",background:dropTarget==="ub"?"#FEF2F2":"#FAFAF8",border:dropTarget==="ub"?"2px dashed #DC2626":"1.5px dashed #E5E7EB",fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>
+        style={{marginTop:16,padding:"12px",borderRadius:10,textAlign:"center",background:dropTarget==="ub"?"#FEF2F2":"#FAFAF8",border:dropTarget==="ub"?"2px dashed #DC2626":"1.5px dashed #E5E7EB",fontSize:11,color:"#9CA3AF",fontStyle:"italic"}}>
         ↓ Drop a scheduled bar here to unschedule it
       </div>
     </div>
@@ -422,11 +407,9 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
   const [aiLoad,setAiLoad]=useState(false);
   const [newText,setNewText]=useState("");
   const [newPid,setNewPid]=useState(1);
-  const [editId,setEditId]=useState(null);     // for This Week's Plan items only
-  const [editVal,setEditVal]=useState("");
-  const [tdEditId,setTdEditId]=useState(null); // for td left column items only
+  const [tdEditId,setTdEditId]=useState(null);
   const [tdEditVal,setTdEditVal]=useState("");
-  const [buEditId,setBuEditId]=useState(null); // for parsed bu tasks only
+  const [buEditId,setBuEditId]=useState(null);
   const [buEditVal,setBuEditVal]=useState("");
   const wk=WEEK_DATES[week];
   const td=mergeTD[wk]||[], bu=bottomUp[wk]||[];
@@ -443,7 +426,12 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
     try {
       const resp=await callAI(`Convert rough notes into clean action items (under 12 words). Assign pid: ${PRIORITIES.map(p=>`${p.id}=${p.label}`).join(", ")}. Return ONLY JSON:\n[{"text":"item","pid":1}]\nNotes: ${raw}`);
       const items=JSON.parse(resp.replace(/\`\`\`json|\`\`\`/g,"").trim());
-      const n={...bottomUp,[wk]:items.map(i=>({...i,id:Date.now()+Math.random(),done:false}))};
+      const existing=bottomUp[wk]||[];
+      const existingTexts=new Set(existing.map(i=>i.text.toLowerCase().trim()));
+      const newItems=items
+        .filter(i=>!existingTexts.has(i.text.toLowerCase().trim()))
+        .map(i=>({...i,id:Date.now()+Math.random(),done:false}));
+      const n={...bottomUp,[wk]:[...existing,...newItems]};
       setBottomUp(n); cloudSave("merge_bu",n);
     } catch(e){console.error(e);setBuAiErr(true);}
     setAiLoad(false);
@@ -453,13 +441,6 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
     if(!buEditVal.trim()){setBuEditId(null);return;}
     const n={...bottomUp,[wk]:bu.map(t=>t.id===item.id?{...t,text:buEditVal}:t)};
     setBottomUp(n); cloudSave("merge_bu",n); setBuEditId(null);
-  };
-  const saveEdit=item=>{
-    if(!editVal.trim()){setEditId(null);return;}
-    const inTD=td.find(t=>t.id===item.id);
-    if(inTD){const n={...mergeTD,[wk]:td.map(t=>t.id===item.id?{...t,text:editVal}:t)};setMergeTD(n);cloudSave("merge_td",n);}
-    else{const n={...bottomUp,[wk]:bu.map(t=>t.id===item.id?{...t,text:editVal}:t)};setBottomUp(n);cloudSave("merge_bu",n);}
-    setEditId(null);
   };
   const saveTdEdit=item=>{
     if(!tdEditVal.trim()){setTdEditId(null);return;}
@@ -475,7 +456,7 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
     <div>
       <SecHead title="Weekly Merge" sub="Top-down + bottom-up → this week's plan"/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-        <WNav week={week} setWeek={w=>{setWeek(w);setEditId(null);setEditVal("");setBuEditId(null);setBuEditVal("");setTdEditId(null);setTdEditVal("");}}/>
+        <WNav week={week} setWeek={w=>{setWeek(w);setBuEditId(null);setBuEditVal("");setTdEditId(null);setTdEditVal("");}}/>
         <PBtn label="Connect Outlook / Teams" icon="🔗"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
