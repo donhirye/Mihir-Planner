@@ -81,8 +81,18 @@ function PBtn({label,icon}) {
 }
 
 const callAI = async prompt => {
-  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content:prompt}]})});
-  const d=await r.json(); return d.content?.[0]?.text||"";
+  // On Vercel — route through serverless proxy
+  if (window.location.hostname !== "localhost") {
+    const r = await fetch("/api/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    const d = await r.json();
+    return d.text || "";
+  }
+  // On localhost — direct call (will fail due to CORS, AI features disabled locally)
+  throw new Error("AI not available on localhost");
 };
 
 // ── Annual ────────────────────────────────────────────────────────────────────
