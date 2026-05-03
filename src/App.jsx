@@ -459,7 +459,8 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
 }
 
 // ── Timetable ─────────────────────────────────────────────────────────────────
-function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTasks,scheduledIds,setScheduledIds}) {
+function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTasks,scheduledIds,setScheduledIds,isMobile}) {
+  const TCOL_W = isMobile ? 80 : "auto"; // auto = stretch to fill
   const [week,setWeek]=useState(0);
   const [dragTask,setDragTask]=useState(null);
   const [newExtra,setNewExtra]=useState("");
@@ -469,10 +470,24 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const td=mergeTD[wk]||[], bu=(lsGet("merge_bu",{})[wk]||[]).filter(i=>!i.done);
   const panel=[...td,...bu,...extraTasks];
   const ck=(day,si)=>`${wk}-${day}-${si}`;
+  const [dragBlock, setDragBlock] = useState(null); // {key, day, si} of block being dragged
 
   const drop=(day,si)=>{
+    const k=ck(day,si);
+    if(dragBlock) {
+      // Move existing block to new position
+      if(dragBlock.key === k) { setDragBlock(null); return; }
+      const block = gridBlocks[dragBlock.key];
+      if(!block) { setDragBlock(null); return; }
+      const n={...gridBlocks};
+      delete n[dragBlock.key];
+      n[k]={...block};
+      setGridBlocks(n); cloudSave("tt_blocks",n);
+      setDragBlock(null);
+      return;
+    }
     if(!dragTask) return;
-    const k=ck(day,si), n={...gridBlocks,[k]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2}};
+    const n={...gridBlocks,[k]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2}};
     setGridBlocks(n); cloudSave("tt_blocks",n);
     const s=[...new Set([...scheduledIds,dragTask.id])]; setScheduledIds(s); cloudSave("tt_scheduled_ids",s);
     setDragTask(null);
@@ -495,24 +510,51 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const [importText, setImportText] = useState("");
   const [importing,  setImporting]  = useState(false);
 
-  const importFromCopilot = async () => {
+  const importFromCopilot = () => {
     if (!importText.trim()) return;
     setImporting(true);
     try {
-      const resp = await callAI(`Parse this Outlook calendar export into structured meeting data. The week starts on ${wk}.
-Each row has: Day, Start time, End time, Meeting title.
-Map each meeting to the correct day (Mon/Tue/Wed/Thu/Fri) and convert start time to a slot index where slot 0 = 7am, each slot = 30 min (so 8am = slot 2, 8:30am = slot 3, 9am = slot 4, etc).
-Calculate slots = Math.ceil((end_minutes - start_minutes) / 30) where minutes are from midnight.
-Return ONLY raw JSON array, no markdown:
-[{"day":"Mon","slotIndex":5,"slots":1,"text":"Meeting title","pid":1}]
-pid should always be 1.
-Calendar data:
-${importText}`);
-      const items = JSON.parse(resp.replace(/```json|```/g,"").trim());
+      const lines = importText.trim().split("\n").filter(l => l.trim() && !l.includes("---") && !l.toLowerCase().includes("day |"));
       const next = { ...gridBlocks };
-      items.forEach(item => {
-        const k = ck(item.day, item.slotIndex);
-        next[k] = { text: item.text, pid: item.pid||1, id: Date.now()+Math.random(), slots: Math.max(1, item.slots||1) };
+      const dayMap = { "mon":0, "tue":1, "wed":2, "thu":3, "fri":4 };
+      lines.forEach(line => {
+        // Handle pipe-separated: Mon 5/4 | 11:30 AM | 11:55 AM | Title
+        // Also handle space-separated: Mon 5/4  11:30 AM  11:55 AM  Title
+        let parts;
+        if (line.includes("|")) {
+          parts = line.split("|").map(p => p.trim()).filter(p => p);
+        } else {
+          const m = line.match(/^(\S+\s+\S+)\s+(\d+:\d+\s*[ap]m)\s+(\d+:\d+\s*[ap]m)\s+(.+)/i);
+          if (!m) return;
+          parts = [m[1], m[2], m[3], m[4]];
+        }
+        if (parts.length < 4) return;
+        const [dayDate, startStr, endStr, ...titleParts] = parts;
+        const title = titleParts.join(" ").trim();
+        const dayWord = dayDate.trim().split(/\s+/)[0].toLowerCase().slice(0,3);
+        const di = dayMap[dayWord];
+        if (di === undefined) return;
+
+        const parseTime = str => {
+          const m = str.trim().match(/(\d+):(\d+)\s*(am|pm)/i);
+          if (!m) return null;
+          let h = parseInt(m[1]), min = parseInt(m[2]);
+          const ap = m[3].toLowerCase();
+          if (ap === "pm" && h !== 12) h += 12;
+          if (ap === "am" && h === 12) h = 0;
+          return h * 60 + min;
+        };
+
+        const startMins = parseTime(startStr);
+        const endMins   = parseTime(endStr);
+        if (startMins === null || endMins === null) return;
+
+        const slotIndex = Math.round((startMins - 7 * 60) / 30);
+        const slots     = Math.max(1, Math.ceil((endMins - startMins) / 30));
+        if (slotIndex < 0 || slotIndex >= HOURS.length * 2) return;
+
+        const k = ck(DAYS[di], slotIndex);
+        next[k] = { text: title, pid: 1, id: Date.now() + Math.random(), slots };
       });
       setGridBlocks(next); cloudSave("tt_blocks", next);
       setShowImport(false); setImportText("");
@@ -597,7 +639,7 @@ ${importText}`);
           <div style={{display:"flex",gap:8,marginTop:10}}>
             <button onClick={importFromCopilot} disabled={importing}
               style={{...bd,background:importing?"#9CA3AF":"#0078D4",cursor:importing?"not-allowed":"pointer"}}>
-              {importing?"⏳ Importing…":"✦ AI → Place on Timetable"}
+              {importing?"⏳ Importing…":"📥 Place on Timetable"}
             </button>
             <button onClick={()=>{setShowImport(false);setImportText("");}} style={bg}>Cancel</button>
           </div>
@@ -620,9 +662,12 @@ ${importText}`);
             <button onClick={addExtra} style={{...bd,width:"100%",fontSize:11,padding:"5px 0"}}>+ Add to panel</button>
           </div>
         </div>
-        <div style={{flex:1,overflowX:"auto"}}>
-          <table style={{borderCollapse:"collapse",tableLayout:"fixed",width:50+DAYS.length*COL_W}}>
-            <colgroup><col style={{width:50}}/>{DAYS.map(d=><col key={d} style={{width:COL_W}}/>)}</colgroup>
+        <div style={{flex:1,overflowX:isMobile?"auto":"hidden",width:"100%"}}>
+          <table style={{borderCollapse:"collapse",tableLayout:"fixed",width:"100%",minWidth:isMobile?500:"auto"}}>
+            <colgroup>
+              <col style={{width:46}}/>
+              {DAYS.map(d=><col key={d} style={{width:isMobile?"80px":"auto"}}/>)}
+            </colgroup>
             <thead><tr>
               <th style={{background:"#F9FAFB",border:"1px solid #E5E7EB",fontSize:9,color:"#6B7280",padding:"6px 0"}}></th>
               {DAYS.map(d=><th key={d} style={{background:"#F9FAFB",border:"1px solid #E5E7EB",padding:"7px",fontSize:11,fontWeight:800,color:"#374151",letterSpacing:"0.08em"}}>{d}</th>)}
@@ -641,16 +686,19 @@ ${importText}`);
                       if(block){
                         const p=gp(block.pid);
                         return (
-                          <td key={day} rowSpan={block.slots} style={{border:`2px solid ${p?.color||"#E5E7EB"}`,padding:0,verticalAlign:"top",background:p?.light||"#F0FDF4",position:"relative",overflow:"visible"}}>
-                            <div style={{position:"relative",height:block.slots*CELL_H-4,padding:"3px 6px",display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden"}}>
+                          <td key={day} rowSpan={block.slots} style={{border:`2px solid ${p?.color||"#E5E7EB"}`,padding:0,verticalAlign:"top",background:p?.light||"#F0FDF4",position:"relative",overflow:"visible",opacity:dragBlock?.key===k?0.4:1}}
+                            draggable
+                            onDragStart={e=>{e.stopPropagation();setDragBlock({key:k,day,si});}}
+                            onDragEnd={()=>setDragBlock(null)}>
+                            <div style={{position:"relative",height:block.slots*CELL_H-4,padding:"3px 6px",display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",cursor:"grab"}}>
                               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
                                 <span style={{fontSize:10,color:p?.color,fontWeight:700,lineHeight:1.3,flex:1}}>{block.text}</span>
-                                <button onClick={()=>remBlock(k)} style={{background:"none",border:"none",cursor:"pointer",color:p?.color,fontSize:11,padding:0,opacity:0.5,flexShrink:0}}>×</button>
+                                <button onClick={e=>{e.stopPropagation();remBlock(k);}} style={{background:"none",border:"none",cursor:"pointer",color:p?.color,fontSize:11,padding:0,opacity:0.5,flexShrink:0}}>×</button>
                               </div>
                               {block.slots>=2&&<div style={{fontSize:8,color:p?.color,opacity:0.7}}>{block.slots*30}min</div>}
                               <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
                                 onMouseDown={e=>{
-                                  e.preventDefault();
+                                  e.preventDefault(); e.stopPropagation();
                                   const sy=e.clientY,os=block.slots;
                                   const mv=mv2=>{const ns=Math.max(1,Math.min(10,os+Math.round((mv2.clientY-sy)/CELL_H)));const n={...gridBlocks,[k]:{...block,slots:ns}};setGridBlocks(n);cloudSave("tt_blocks",n);};
                                   const up=()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);};
@@ -785,6 +833,14 @@ function RetroScreen({rawNotes,setRawNotes,organized,setOrganized}) {
 // ── App Shell ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [screen,setScreen]=useState(0);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(()=>{
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  },[]);
   const [freeform,setFreeform]=useState(()=>lsGet("annual_freeform",{}));
   const [parsed,setParsed]=useState(()=>lsGet("annual_parsed",{}));
   const [mergeTD,setMergeTD]=useState(()=>lsGet("merge_td",{}));
@@ -813,39 +869,73 @@ export default function App() {
     <AnnualScreen key="a" freeform={freeform} setFreeform={setFreeform} parsed={parsed} setParsed={setParsed}/>,
     <QuarterlyScreen key="q" parsed={parsed} setParsed={setParsed} mergeTD={mergeTD} setMergeTD={setMergeTD}/>,
     <WeeklyMergeScreen key="w" mergeTD={mergeTD} setMergeTD={setMergeTD} bottomUp={bottomUp} setBottomUp={setBottomUp} buRaw={buRaw} setBuRaw={setBuRaw}/>,
-    <TimetableScreen key="t" mergeTD={mergeTD} gridBlocks={gridBlocks} setGridBlocks={setGridBlocks} extraTasks={extraTasks} setExtraTasks={setExtraTasks} scheduledIds={scheduledIds} setScheduledIds={setScheduledIds}/>,
+    <TimetableScreen key="t" mergeTD={mergeTD} gridBlocks={gridBlocks} setGridBlocks={setGridBlocks} extraTasks={extraTasks} setExtraTasks={setExtraTasks} scheduledIds={scheduledIds} setScheduledIds={setScheduledIds} isMobile={isMobile}/>,
     <RetroScreen key="r" rawNotes={rawNotes} setRawNotes={setRawNotes} organized={organized} setOrganized={setOrganized}/>,
   ];
 
   return (
-    <div style={{fontFamily:"'Georgia','Times New Roman',serif",background:"#F8F7F5",minHeight:"100vh",display:"flex"}}>
-      <div style={{width:180,background:"#111827",flexShrink:0,display:"flex",flexDirection:"column",padding:"24px 0",position:"sticky",top:0,height:"100vh"}}>
-        <div style={{padding:"0 20px 24px",borderBottom:"1px solid #374151"}}>
-          <div style={{fontSize:9,letterSpacing:"0.2em",color:"#6B7280",textTransform:"uppercase",marginBottom:4}}>Wi-Tronix</div>
-          <div style={{fontSize:14,fontWeight:800,color:"#F9FAFB"}}>My Planner</div>
-          <div style={{fontSize:9,color:syncing?"#F59E0B":"#10B981",marginTop:4,display:"flex",alignItems:"center",gap:4}}>
-            <div style={{width:5,height:5,borderRadius:"50%",background:syncing?"#F59E0B":"#10B981"}}/>
-            {syncing?"Syncing…":"Synced ✓"}
+    <div style={{fontFamily:"'Georgia','Times New Roman',serif",background:"#F8F7F5",minHeight:"100vh",display:"flex",flexDirection:isMobile?"column":"row"}}>
+      {/* Mobile top nav bar */}
+      {isMobile && (
+        <div style={{background:"#111827",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
+          <div>
+            <div style={{fontSize:8,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.2em"}}>Wi-Tronix</div>
+            <div style={{fontSize:13,fontWeight:800,color:"#F9FAFB"}}>My Planner</div>
           </div>
+          <button onClick={()=>setSidebarOpen(!sidebarOpen)} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",padding:"4px 8px"}}>☰</button>
         </div>
-        <nav style={{flex:1,padding:"16px 0"}}>
+      )}
+
+      {/* Mobile dropdown menu */}
+      {isMobile && sidebarOpen && (
+        <div style={{background:"#111827",borderBottom:"1px solid #374151",zIndex:49}}>
           {NAV.map((n,i)=>(
-            <button key={n} onClick={()=>setScreen(i)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 20px",background:screen===i?"#1D4ED8":"none",border:"none",cursor:"pointer",textAlign:"left",color:screen===i?"#fff":"#9CA3AF",fontSize:12,fontFamily:"inherit",fontWeight:screen===i?700:400,transition:"all 0.1s"}}>
-              <span style={{fontSize:14,opacity:0.8}}>{ICONS[i]}</span>{n}
+            <button key={n} onClick={()=>{setScreen(i);setSidebarOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"12px 20px",background:screen===i?"#1D4ED8":"none",border:"none",cursor:"pointer",color:screen===i?"#fff":"#9CA3AF",fontSize:14,fontFamily:"inherit",fontWeight:screen===i?700:400}}>
+              <span style={{fontSize:16}}>{ICONS[i]}</span>{n}
             </button>
           ))}
-        </nav>
-        <div style={{padding:"16px 20px",borderTop:"1px solid #374151"}}>
-          <div style={{fontSize:9,letterSpacing:"0.15em",color:"#6B7280",textTransform:"uppercase",marginBottom:10}}>Streams</div>
-          {PRIORITIES.map(p=>(
-            <div key={p.id} style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-              <span style={{fontSize:10,color:"#D1D5DB",lineHeight:1.3}}>{p.label}</span>
-            </div>
-          ))}
         </div>
-      </div>
-      <div style={{flex:1,padding:"32px 28px",maxWidth:960,overflowY:"auto"}}>
+      )}
+
+      {/* Desktop sidebar */}
+      {!isMobile && (
+        <div style={{width:200,background:"#111827",flexShrink:0,display:"flex",flexDirection:"column",padding:"24px 0",position:"sticky",top:0,height:"100vh"}}>
+          <div style={{padding:"0 20px 24px",borderBottom:"1px solid #374151"}}>
+            <div style={{fontSize:9,letterSpacing:"0.2em",color:"#6B7280",textTransform:"uppercase",marginBottom:4}}>Wi-Tronix</div>
+            <div style={{fontSize:15,fontWeight:800,color:"#F9FAFB"}}>My Planner</div>
+            <div style={{fontSize:9,color:syncing?"#F59E0B":"#10B981",marginTop:4,display:"flex",alignItems:"center",gap:4}}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:syncing?"#F59E0B":"#10B981"}}/>
+              {syncing?"Syncing…":"Synced ✓"}
+            </div>
+          </div>
+          <nav style={{flex:1,padding:"16px 0"}}>
+            {NAV.map((n,i)=>(
+              <button key={n} onClick={()=>setScreen(i)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"11px 20px",background:screen===i?"#1D4ED8":"none",border:"none",cursor:"pointer",textAlign:"left",color:screen===i?"#fff":"#9CA3AF",fontSize:13,fontFamily:"inherit",fontWeight:screen===i?700:400,transition:"all 0.1s"}}>
+                <span style={{fontSize:15,opacity:0.8}}>{ICONS[i]}</span>{n}
+              </button>
+            ))}
+          </nav>
+          <div style={{padding:"16px 20px",borderTop:"1px solid #374151"}}>
+            <div style={{fontSize:9,letterSpacing:"0.15em",color:"#6B7280",textTransform:"uppercase",marginBottom:10}}>Streams</div>
+            {PRIORITIES.map(p=>(
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                <span style={{fontSize:10,color:"#D1D5DB",lineHeight:1.3}}>{p.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Main content */}
+      <div style={{flex:1,padding:isMobile?"16px":"36px 32px",width:"100%",maxWidth:isMobile?"100%":"none",overflowY:"auto",overflowX:"hidden",boxSizing:"border-box"}}>
+        {/* Mobile bottom nav */}
+        {isMobile && (
+          <div style={{fontSize:9,color:"#9CA3AF",marginBottom:12,display:"flex",alignItems:"center",gap:4}}>
+            <div style={{width:5,height:5,borderRadius:"50%",background:syncing?"#F59E0B":"#10B981"}}/>
+            {syncing?"Syncing…":"Synced ✓"} · {NAV[screen]}
+          </div>
+        )}
         {screens[screen]}
       </div>
     </div>
