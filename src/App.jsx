@@ -141,15 +141,13 @@ const callAI = async (prompt) => {
 };
 
 // ─── SCREEN 1: ANNUAL ─────────────────────────────────────────────────────────
-const AnnualScreen = () => {
-  const [freeform,   setFreeform]   = useCloudState("annual_freeform", {});
-  const [parsed,     setParsed]     = useCloudState("annual_parsed", {});
+const AnnualScreen = ({ parsed, updateParsed, freeform, updateFreeform }) => {
   const [open,       setOpen]       = useState(null);
   const [loading,    setLoading]    = useState(null);
   const [editingPid, setEditingPid] = useState(null);
   const [draftText,  setDraftText]  = useState("");
 
-  const saveFreeform = (pid, val) => setFreeform({ ...freeform, [pid]: val });
+  const saveFreeform = (pid, val) => updateFreeform({ ...freeform, [pid]: val });
 
   const parseWithAI = async (pid) => {
     const text = freeform[pid] || ""; if (!text.trim()) return;
@@ -166,7 +164,7 @@ Return ONLY raw JSON array, no markdown:
 [{"text":"task","month":4,"quarter":"Q2","pid":${pid}}]
 Notes: ${text}`);
       const items = JSON.parse(raw.replace(/```json|```/g,"").trim());
-      setParsed({ ...parsed, [pid]: items.map(i=>({...i,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4})) });
+      updateParsed({ ...parsed, [pid]: items.map(i=>({...i,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4})) });
     } catch(e) { console.error(e); }
     setLoading(null);
   };
@@ -302,9 +300,8 @@ const WeekBar = ({ task, onUpdate, onBarDragStart, onBarDragEnd }) => {
 };
 
 // ─── SCREEN 2: QUARTERLY ──────────────────────────────────────────────────────
-const QuarterlyScreen = ({ mergeTD, updateMergeTD }) => {
+const QuarterlyScreen = ({ mergeTD, updateMergeTD, parsed, updateParsed }) => {
   const [quarter,    setQuarter]    = useState(1);
-  const [parsed,     setParsed]     = useCloudState("annual_parsed", {});
   const [dragItem,   setDragItem]   = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [dragBarId,  setDragBarId]  = useState(null);
@@ -321,8 +318,6 @@ const QuarterlyScreen = ({ mergeTD, updateMergeTD }) => {
   const assignedForMonth   = m => allTasks.filter(t=>t.month===m && !!t.weekAssigned);
   // All assigned across this quarter (for bar drag unschedule)
   const allAssigned = qMonths.flatMap(m=>assignedForMonth(m));
-
-  const updateParsed = (next) => setParsed(next);
 
   const schedulTask = (item, weekLabel, targetMonth) => {
     const next = { ...parsed };
@@ -1124,23 +1119,31 @@ Notes: ${raw}`);
 export default function App() {
   const [screen,   setScreen]   = useState(0);
   const [mergeTD,  setMergeTD]  = useState(() => load("merge_td", {}));
+  const [parsed,   setParsed]   = useState(() => load("annual_parsed", {}));
+  const [freeform, setFreeform] = useState(() => load("annual_freeform", {}));
   const [syncing,  setSyncing]  = useState(true);
 
-  // On mount: pull latest data from Supabase for all shared state
+  // On mount: pull latest data from Supabase
   useEffect(() => {
     Promise.all([
       loadFromCloud("merge_td", {}),
-    ]).then(([md]) => {
+      loadFromCloud("annual_parsed", {}),
+      loadFromCloud("annual_freeform", {}),
+    ]).then(([md, pd, ff]) => {
       setMergeTD(md);
+      setParsed(pd);
+      setFreeform(ff);
       setSyncing(false);
     }).catch(() => setSyncing(false));
   }, []);
 
-  const updateMergeTD = (next) => { setMergeTD(next); save("merge_td", next); };
+  const updateMergeTD  = (next) => { setMergeTD(next);  save("merge_td", next); };
+  const updateParsed   = (next) => { setParsed(next);   save("annual_parsed", next); };
+  const updateFreeform = (next) => { setFreeform(next); save("annual_freeform", next); };
 
   const screens = [
-    <AnnualScreen key="annual" />,
-    <QuarterlyScreen key="quarterly" mergeTD={mergeTD} updateMergeTD={updateMergeTD} />,
+    <AnnualScreen key="annual" parsed={parsed} updateParsed={updateParsed} freeform={freeform} updateFreeform={updateFreeform} />,
+    <QuarterlyScreen key="quarterly" mergeTD={mergeTD} updateMergeTD={updateMergeTD} parsed={parsed} updateParsed={updateParsed} />,
     <WeeklyMergeScreen key="merge" mergeTD={mergeTD} updateMergeTD={updateMergeTD} />,
     <TimetableScreen key="timetable" mergeTD={mergeTD} />,
     <RetroScreen key="retro" />,
