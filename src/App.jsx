@@ -575,10 +575,8 @@ const QuarterlyScreen = ({ mergeTD, updateMergeTD, parsed, updateParsed }) => {
 };
 
 // ─── SCREEN 3: WEEKLY MERGE ───────────────────────────────────────────────────
-const WeeklyMergeScreen = ({ mergeTD, updateMergeTD }) => {
+const WeeklyMergeScreen = ({ mergeTD, updateMergeTD, bottomUp, updateBottomUp, buFreeform, updateBuFreeform }) => {
   const [week,       setWeek]       = useState(0);
-  const [bottomUp,   setBottomUp]   = useCloudState("merge_bu", {});
-  const [buFreeform, setBuFreeform] = useCloudState("merge_bu_raw", {});
   const [aiLoading,  setAiLoading]  = useState(false);
   const [newText,    setNewText]    = useState("");
   const [newPid,     setNewPid]     = useState(1);
@@ -599,7 +597,7 @@ const WeeklyMergeScreen = ({ mergeTD, updateMergeTD }) => {
     } else {
       // It's a bottom-up item
       const next = { ...bottomUp, [wk]: buItems.map(t => t.id===item.id ? {...t, text:planEditVal} : t) };
-      setBottomUp(next);
+      updateBottomUp(next);
     }
     setPlanEditId(null);
   };
@@ -611,7 +609,7 @@ const WeeklyMergeScreen = ({ mergeTD, updateMergeTD }) => {
       updateMergeTD(next);
     } else {
       const next = { ...bottomUp, [wk]: buItems.filter(t => t.id !== item.id) };
-      setBottomUp(next);
+      updateBottomUp(next);
     }
   };
 
@@ -632,14 +630,14 @@ Return ONLY raw JSON array:
 Notes: ${raw}`);
       const items = JSON.parse(resp.replace(/```json|```/g,"").trim());
       const next  = { ...bottomUp, [wk]: items.map(i=>({...i,id:Date.now()+Math.random(),done:false})) };
-      setBottomUp(next);
+      updateBottomUp(next);
     } catch(e) { console.error(e); }
     setAiLoading(false);
   };
 
   const toggleBU = id => {
     const next = { ...bottomUp, [wk]: buItems.map(i=>i.id===id?{...i,done:!i.done}:i) };
-    setBottomUp(next);
+    updateBottomUp(next);
   };
 
   const allThisWeek = [...currentTD, ...buItems.filter(i=>!i.done)];
@@ -682,7 +680,7 @@ Notes: ${raw}`);
         <div style={{ background:"#fff", border:"1.5px solid #FEF3C7", borderRadius:10, padding:"16px 18px" }}>
           <div style={{ fontSize:10, fontWeight:800, letterSpacing:"0.12em", color:"#D97706", marginBottom:10 }}>↑ FROM EMAIL / VERBAL</div>
           <textarea value={buFreeform[wk]||""}
-            onChange={e=>{ const next={...buFreeform,[wk]:e.target.value}; setBuFreeform(next); }}
+            onChange={e=>{ const next={...buFreeform,[wk]:e.target.value}; updateBuFreeform(next); }}
             placeholder={"Paste emails, type or speak your tasks…\n\nE.g.:\n- Follow up with LA Metro on contract\n- Review PATS prototype feedback\n- Prep for Thursday standup"}
             style={{ width:"100%", minHeight:120, fontSize:12, border:"1.5px solid #FDE68A", borderRadius:8,
               padding:"10px 12px", resize:"vertical", outline:"none", fontFamily:"inherit",
@@ -753,13 +751,10 @@ Notes: ${raw}`);
 const CELL_H = 26;
 const COL_W  = 120;
 
-const TimetableScreen = ({ mergeTD }) => {
+const TimetableScreen = ({ mergeTD, gridBlocks, updateGridBlocks, extraTasks, updateExtraTasks, scheduledIds, updateScheduled }) => {
   const [week,         setWeek]         = useState(0);
-  const [gridBlocks,   setGridBlocks]   = useCloudState("tt_blocks", {});
   const [dragTask,     setDragTask]     = useState(null);
-  const [extraTasks,   setExtraTasks]   = useCloudState("tt_extra", []);
   const [newExtra,     setNewExtra]     = useState("");
-  const [scheduledIds, setScheduledIds] = useCloudState("tt_scheduled_ids", []);
   const [inlineEdit,   setInlineEdit]   = useState(null);
   const [inlineVal,    setInlineVal]    = useState("");
   const wk = WEEK_DATES[week];
@@ -774,31 +769,31 @@ const TimetableScreen = ({ mergeTD }) => {
     if (!dragTask) return;
     const key = ck(day, slotIndex);
     const next = { ...gridBlocks, [key]: { text:dragTask.text, pid:dragTask.pid, id:dragTask.id, slots:2 } };
-    setGridBlocks(next);
+    updateGridBlocks(next);
     const sNext = [...new Set([...scheduledIds, dragTask.id])];
-    setScheduledIds(sNext);
+    updateScheduled(sNext);
     setDragTask(null);
   };
 
   const removeBlock = (key) => {
     const b = gridBlocks[key];
-    if (b) { const sNext=scheduledIds.filter(id=>id!==b.id); setScheduledIds(sNext); }
+    if (b) { const sNext=scheduledIds.filter(id=>id!==b.id); updateScheduled(sNext); }
     const next = { ...gridBlocks }; delete next[key];
-    setGridBlocks(next);
+    updateGridBlocks(next);
   };
 
   const saveInline = (day, slotIndex) => {
     if (!inlineVal.trim()) { setInlineEdit(null); return; }
     const key = ck(day, slotIndex);
     const next = { ...gridBlocks, [key]: { text:inlineVal, pid:1, id:Date.now(), slots:2 } };
-    setGridBlocks(next);
+    updateGridBlocks(next);
     setInlineEdit(null); setInlineVal("");
   };
 
   const addExtra = () => {
     if (!newExtra.trim()) return;
     const item = { text:newExtra, pid:1, id:Date.now() };
-    const next = [...extraTasks, item]; setExtraTasks(next);
+    const next = [...extraTasks, item]; updateExtraTasks(next);
     setNewExtra("");
   };
 
@@ -942,7 +937,7 @@ const TimetableScreen = ({ mergeTD }) => {
                                       const delta=Math.round((mv.clientY-startY)/CELL_H);
                                       const ns=Math.max(1,Math.min(10,origSlots+delta));
                                       const next={...gridBlocks,[key]:{...block,slots:ns}};
-                                      setGridBlocks(next);
+                                      updateGridBlocks(next);
                                     };
                                     const onUp=()=>{ window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); };
                                     window.addEventListener("mousemove",onMove); window.addEventListener("mouseup",onUp);
@@ -990,10 +985,8 @@ const TimetableScreen = ({ mergeTD }) => {
 };
 
 // ─── SCREEN 5: RETRO ──────────────────────────────────────────────────────────
-const RetroScreen = () => {
+const RetroScreen = ({ rawNotes, updateRawNotes, organized, updateOrganized }) => {
   const [week,      setWeek]      = useState(0);
-  const [rawNotes,  setRawNotes]  = useCloudState("retro_raw", {});
-  const [organized, setOrganized] = useCloudState("retro_org", {});
   const [loading,   setLoading]   = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editVal,   setEditVal]   = useState("");
@@ -1010,7 +1003,7 @@ Notes: ${raw}`);
       const p = JSON.parse(resp.replace(/```json|```/g,"").trim());
       const addIds = arr => (arr||[]).map(i=>({...i,id:Date.now()+Math.random()}));
       const next = { ...organized, [wk]: { got_done:addIds(p.got_done), not_done:addIds(p.not_done), lessons:addIds(p.lessons) } };
-      setOrganized(next);
+      updateOrganized(next);
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -1018,13 +1011,13 @@ Notes: ${raw}`);
   const deleteCard = (section, id) => {
     const org = organized[wk]; if (!org) return;
     const next = { ...organized, [wk]: { ...org, [section]: org[section].filter(i=>i.id!==id) } };
-    setOrganized(next);
+    updateOrganized(next);
   };
 
   const saveEdit = (section, id) => {
     const org = organized[wk]; if (!org) return;
     const next = { ...organized, [wk]: { ...org, [section]: org[section].map(i=>i.id===id?{...i,text:editVal}:i) } };
-    setOrganized(next);
+    updateOrganized(next);
     setEditingId(null);
   };
 
@@ -1090,7 +1083,7 @@ Notes: ${raw}`);
         <div>
           <div style={{ fontSize:10, fontWeight:800, letterSpacing:"0.1em", color:"#6B7280", marginBottom:8 }}>YOUR RAW NOTES</div>
           <textarea value={rawNotes[wk]||""}
-            onChange={e=>{ const next={...rawNotes,[wk]:e.target.value}; setRawNotes(next); }}
+            onChange={e=>{ const next={...rawNotes,[wk]:e.target.value}; updateRawNotes(next); }}
             placeholder={"Dump everything here…\n\nE.g.:\n- Finally closed LA Metro scope, took 3 meetings\n- PATS demo went well but they want occupancy reports faster\n- Didn't finish Violet Live prototype\n- Lesson: block deep work earlier in the week"}
             style={{ width:"100%", minHeight:280, fontSize:13, border:"1.5px solid #E5E7EB", borderRadius:10,
               padding:"14px", resize:"vertical", outline:"none", fontFamily:"inherit",
@@ -1117,36 +1110,70 @@ Notes: ${raw}`);
 
 // ─── APP SHELL ────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen,   setScreen]   = useState(0);
-  const [mergeTD,  setMergeTD]  = useState(() => load("merge_td", {}));
-  const [parsed,   setParsed]   = useState(() => load("annual_parsed", {}));
-  const [freeform, setFreeform] = useState(() => load("annual_freeform", {}));
-  const [syncing,  setSyncing]  = useState(true);
+  const [screen,      setScreen]      = useState(0);
+  const [mergeTD,     setMergeTD]     = useState(() => load("merge_td", {}));
+  const [parsed,      setParsed]      = useState(() => load("annual_parsed", {}));
+  const [freeform,    setFreeform]    = useState(() => load("annual_freeform", {}));
+  const [bottomUp,    setBottomUp]    = useState(() => load("merge_bu", {}));
+  const [buFreeform,  setBuFreeform]  = useState(() => load("merge_bu_raw", {}));
+  const [gridBlocks,  setGridBlocks]  = useState(() => load("tt_blocks", {}));
+  const [extraTasks,  setExtraTasks]  = useState(() => load("tt_extra", []));
+  const [scheduledIds,setScheduledIds]= useState(() => load("tt_scheduled_ids", []));
+  const [rawNotes,    setRawNotes]    = useState(() => load("retro_raw", {}));
+  const [organized,   setOrganized]   = useState(() => load("retro_org", {}));
+  const [syncing,     setSyncing]     = useState(true);
 
-  // On mount: pull latest data from Supabase
   useEffect(() => {
     Promise.all([
       loadFromCloud("merge_td", {}),
       loadFromCloud("annual_parsed", {}),
       loadFromCloud("annual_freeform", {}),
-    ]).then(([md, pd, ff]) => {
-      setMergeTD(md);
-      setParsed(pd);
-      setFreeform(ff);
+      loadFromCloud("merge_bu", {}),
+      loadFromCloud("merge_bu_raw", {}),
+      loadFromCloud("tt_blocks", {}),
+      loadFromCloud("tt_extra", []),
+      loadFromCloud("tt_scheduled_ids", []),
+      loadFromCloud("retro_raw", {}),
+      loadFromCloud("retro_org", {}),
+    ]).then(([md,pd,ff,bu,bur,gb,et,si,rn,og]) => {
+      setMergeTD(md); setParsed(pd); setFreeform(ff);
+      setBottomUp(bu); setBuFreeform(bur);
+      setGridBlocks(gb); setExtraTasks(et); setScheduledIds(si);
+      setRawNotes(rn); setOrganized(og);
       setSyncing(false);
     }).catch(() => setSyncing(false));
   }, []);
 
-  const updateMergeTD  = (next) => { setMergeTD(next);  save("merge_td", next); };
-  const updateParsed   = (next) => { setParsed(next);   save("annual_parsed", next); };
-  const updateFreeform = (next) => { setFreeform(next); save("annual_freeform", next); };
+  const updateMergeTD   = v => { setMergeTD(v);      save("merge_td", v); };
+  const updateParsed    = v => { setParsed(v);        save("annual_parsed", v); };
+  const updateFreeform  = v => { setFreeform(v);      save("annual_freeform", v); };
+  const updateBottomUp  = v => { setBottomUp(v);      save("merge_bu", v); };
+  const updateBuFreeform= v => { setBuFreeform(v);    save("merge_bu_raw", v); };
+  const updateGridBlocks= v => { setGridBlocks(v);    save("tt_blocks", v); };
+  const updateExtraTasks= v => { setExtraTasks(v);    save("tt_extra", v); };
+  const updateScheduled = v => { setScheduledIds(v);  save("tt_scheduled_ids", v); };
+  const updateRawNotes  = v => { setRawNotes(v);      save("retro_raw", v); };
+  const updateOrganized = v => { setOrganized(v);     save("retro_org", v); };
 
   const screens = [
-    <AnnualScreen key="annual" parsed={parsed} updateParsed={updateParsed} freeform={freeform} updateFreeform={updateFreeform} />,
-    <QuarterlyScreen key="quarterly" mergeTD={mergeTD} updateMergeTD={updateMergeTD} parsed={parsed} updateParsed={updateParsed} />,
-    <WeeklyMergeScreen key="merge" mergeTD={mergeTD} updateMergeTD={updateMergeTD} />,
-    <TimetableScreen key="timetable" mergeTD={mergeTD} />,
-    <RetroScreen key="retro" />,
+    <AnnualScreen key="annual"
+      parsed={parsed} updateParsed={updateParsed}
+      freeform={freeform} updateFreeform={updateFreeform} />,
+    <QuarterlyScreen key="quarterly"
+      mergeTD={mergeTD} updateMergeTD={updateMergeTD}
+      parsed={parsed} updateParsed={updateParsed} />,
+    <WeeklyMergeScreen key="merge"
+      mergeTD={mergeTD} updateMergeTD={updateMergeTD}
+      bottomUp={bottomUp} updateBottomUp={updateBottomUp}
+      buFreeform={buFreeform} updateBuFreeform={updateBuFreeform} />,
+    <TimetableScreen key="timetable"
+      mergeTD={mergeTD}
+      gridBlocks={gridBlocks} updateGridBlocks={updateGridBlocks}
+      extraTasks={extraTasks} updateExtraTasks={updateExtraTasks}
+      scheduledIds={scheduledIds} updateScheduled={updateScheduled} />,
+    <RetroScreen key="retro"
+      rawNotes={rawNotes} updateRawNotes={updateRawNotes}
+      organized={organized} updateOrganized={updateOrganized} />,
   ];
 
   return (
