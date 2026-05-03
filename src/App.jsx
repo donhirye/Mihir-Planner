@@ -160,12 +160,27 @@ function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
                   {items.length>0&&(
                     <div style={{padding:"12px 18px",borderTop:`1px solid ${p.color}22`}}>
                       <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#6B7280",marginBottom:8}}>PARSED ITEMS</div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
                         {items.map(item=>(
-                          <div key={item.id} style={{fontSize:11,color:p.color,background:p.light,border:`1px solid ${p.color}33`,borderRadius:6,padding:"3px 9px"}}>
+                          <div key={item.id} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:p.color,background:p.light,border:`1px solid ${p.color}33`,borderRadius:6,padding:"3px 9px"}}>
                             <span style={{color:"#9CA3AF",marginRight:4,fontSize:10}}>{item.month===-1?item.quarter:MONTHS[item.month]}</span>{item.text}
+                            <button onClick={()=>{const n={...parsed,[pid]:items.filter(i=>i.id!==item.id)};setParsed(n);cloudSave("annual_parsed",n);}} style={{background:"none",border:"none",cursor:"pointer",color:p.color,fontSize:12,padding:"0 0 0 4px",opacity:0.6,lineHeight:1}}>×</button>
                           </div>
                         ))}
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <input id={`ann-add-${pid}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                          onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const newItem={text:e.target.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[...items,newItem]};setParsed(n);cloudSave("annual_parsed",n);e.target.value="";}}}/>
+                        <button onClick={()=>{const inp=document.getElementById(`ann-add-${pid}`);if(inp?.value.trim()){const newItem={text:inp.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[...items,newItem]};setParsed(n);cloudSave("annual_parsed",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
+                      </div>
+                    </div>
+                  )}
+                  {items.length===0&&(
+                    <div style={{padding:"12px 18px",borderTop:`1px solid ${p.color}22`}}>
+                      <div style={{display:"flex",gap:6}}>
+                        <input id={`ann-add-${pid}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                          onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const newItem={text:e.target.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[newItem]};setParsed(n);cloudSave("annual_parsed",n);e.target.value="";}}}/>
+                        <button onClick={()=>{const inp=document.getElementById(`ann-add-${pid}`);if(inp?.value.trim()){const newItem={text:inp.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[newItem]};setParsed(n);cloudSave("annual_parsed",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
                       </div>
                     </div>
                   )}
@@ -263,6 +278,7 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                 <span style={{fontSize:11,color:p?.color,opacity:0.5}}>⠿</span>
                 <span style={{fontSize:12,color:p?.color}}>{task.text}</span>
                 <Pill pid={task.pid} small/>
+                <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,marginLeft:2}}>×</button>
               </div>
             );})}
           </div>
@@ -324,10 +340,16 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                           <span style={{fontSize:12,color:p?.color,opacity:0.5}}>⠿</span>
                           <span style={{fontSize:12,color:p?.color,flex:1,lineHeight:1.3}}>{task.text}</span>
                           <Pill pid={task.pid} small/>
+                          <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1}}>×</button>
                         </div>
                       );})}
                     </div>
                   )}
+                  <div style={{display:"flex",gap:5,marginBottom:8}}>
+                    <input id={`q-add-${month}`} placeholder="Add task…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                      onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const pid=PRIORITIES[0].id;const ni={text:e.target.value.trim(),month,quarter:ql,pid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[pid]:[...(parsed[pid]||[]),ni]};updP(n);e.target.value="";}}}/>
+                    <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const pid=PRIORITIES[0].id;const ni={text:inp.value.trim(),month,quarter:ql,pid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[pid]:[...(parsed[pid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:10,padding:"4px 8px"}}>+</button>
+                  </div>
                   {asgn.length>0&&(
                     <div>
                       <div style={{fontSize:9,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>SCHEDULED</div>
@@ -437,8 +459,23 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
                   <input type="checkbox" checked={!!item.done} onChange={()=>toggleBU(item.id)} style={{cursor:"pointer",accentColor:p?.color,flexShrink:0}}/>
                   <span style={{fontSize:12,flex:1,color:item.done?"#9CA3AF":"#374151",textDecoration:item.done?"line-through":"none"}}>{item.text}</span>
                   {p&&<Pill pid={item.pid} small/>}
+                  <button onClick={()=>{const n={...bottomUp,[wk]:bu.filter(i=>i.id!==item.id)};setBottomUp(n);cloudSave("merge_bu",n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:14,padding:0,lineHeight:1}}>×</button>
                 </div>
               );})}
+              <div style={{display:"flex",gap:6,marginTop:8}}>
+                <input id="bu-add" placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                  onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const ni={text:e.target.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[...bu,ni]};setBottomUp(n);cloudSave("merge_bu",n);e.target.value="";}}}/>
+                <button onClick={()=>{const inp=document.getElementById("bu-add");if(inp?.value.trim()){const ni={text:inp.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[...bu,ni]};setBottomUp(n);cloudSave("merge_bu",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
+              </div>
+            </div>
+          )}
+          {bu.length===0&&(
+            <div style={{marginTop:12}}>
+              <div style={{display:"flex",gap:6}}>
+                <input id="bu-add" placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                  onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const ni={text:e.target.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[ni]};setBottomUp(n);cloudSave("merge_bu",n);e.target.value="";}}}/>
+                <button onClick={()=>{const inp=document.getElementById("bu-add");if(inp?.value.trim()){const ni={text:inp.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[ni]};setBottomUp(n);cloudSave("merge_bu",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
+              </div>
             </div>
           )}
         </div>
@@ -694,6 +731,7 @@ ${importText}`);
               style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",marginBottom:3,borderRadius:6,background:isSched?"#F9FAFB":p?.light||"#F0FDF4",border:`1.5px solid ${isSched?"#E5E7EB":p?.color+"44"||"#D1FAE5"}`,cursor:isSched?"default":"grab",userSelect:"none",opacity:dragTask?.id===task.id?0.35:1}}>
               <span style={{fontSize:10,opacity:0.4,color:p?.color}}>⠿</span>
               <span style={{fontSize:11,flex:1,lineHeight:1.3,color:isSched?"#9CA3AF":p?.color||"#374151",textDecoration:isSched?"line-through":"none"}}>{task.text}</span>
+              <button onClick={e=>{e.stopPropagation();const n=extraTasks.filter(t=>t.id!==task.id);setExtraTasks(n);cloudSave("tt_extra",n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,flexShrink:0}}>×</button>
             </div>
           );})}
           <div style={{marginTop:10,borderTop:"1px solid #F3F4F6",paddingTop:10}}>
