@@ -487,7 +487,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       return;
     }
     if(!dragTask) return;
-    const n={...gridBlocks,[k]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2}};
+    const n={...gridBlocks,[k]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2,source:"manual"}};
     setGridBlocks(n); cloudSave("tt_blocks",n);
     const s=[...new Set([...scheduledIds,dragTask.id])]; setScheduledIds(s); cloudSave("tt_scheduled_ids",s);
     setDragTask(null);
@@ -499,7 +499,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   };
   const saveInline=(day,si)=>{
     if(!inlineVal.trim()){setInlineEdit(null);return;}
-    const k=ck(day,si),n={...gridBlocks,[k]:{text:inlineVal,pid:1,id:Date.now(),slots:2}};
+    const k=ck(day,si),n={...gridBlocks,[k]:{text:inlineVal,pid:1,id:Date.now(),slots:2,source:"manual"}};
     setGridBlocks(n);cloudSave("tt_blocks",n);setInlineEdit(null);setInlineVal("");
   };
   const addExtra=()=>{
@@ -554,7 +554,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
         if (slotIndex < 0 || slotIndex >= HOURS.length * 2) return;
 
         const k = ck(DAYS[di], slotIndex);
-        next[k] = { text: title, pid: 1, id: Date.now() + Math.random(), slots };
+        next[k] = { text: title, pid: 1, id: Date.now() + Math.random(), slots, source: "outlook" };
       });
       setGridBlocks(next); cloudSave("tt_blocks", next);
       setShowImport(false); setImportText("");
@@ -573,7 +573,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       const dateStr = date.toISOString().slice(0,10).replace(/-/g,"");
       for (let si = 0; si < HOURS.length * 2; si++) {
         const b = gridBlocks[ck(day, si)];
-        if (!b) continue;
+        if (!b || b.source === "outlook") continue;
         const startHour = 7 + Math.floor(si / 2);
         const startMin  = (si % 2) * 30;
         const endSi     = si + (b.slots || 1);
@@ -686,13 +686,16 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                       if(block){
                         const p=gp(block.pid);
                         return (
-                          <td key={day} rowSpan={block.slots} style={{border:`2px solid ${p?.color||"#E5E7EB"}`,padding:0,verticalAlign:"top",background:p?.light||"#F0FDF4",position:"relative",overflow:"visible",opacity:dragBlock?.key===k?0.4:1}}
+                          <td key={day} rowSpan={block.slots} style={{border:`2px solid ${p?.color||"#E5E7EB"}`,padding:0,verticalAlign:"top",background:block.source==="outlook"?"#F8FAFF":p?.light||"#F0FDF4",position:"relative",overflow:"visible",opacity:dragBlock?.key===k?0.4:1}}
                             draggable
                             onDragStart={e=>{e.stopPropagation();setDragBlock({key:k,day,si});}}
                             onDragEnd={()=>setDragBlock(null)}>
                             <div style={{position:"relative",height:block.slots*CELL_H-4,padding:"3px 6px",display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",cursor:"grab"}}>
                               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
-                                <span style={{fontSize:10,color:p?.color,fontWeight:700,lineHeight:1.3,flex:1}}>{block.text}</span>
+                                <span style={{fontSize:10,color:block.source==="outlook"?"#6B7280":p?.color,fontWeight:block.source==="outlook"?400:700,lineHeight:1.3,flex:1}}>
+                                  {block.source==="outlook"&&<span style={{fontSize:8,marginRight:3,opacity:0.5}}>📅</span>}
+                                  {block.text}
+                                </span>
                                 <button onClick={e=>{e.stopPropagation();remBlock(k);}} style={{background:"none",border:"none",cursor:"pointer",color:p?.color,fontSize:11,padding:0,opacity:0.5,flexShrink:0}}>×</button>
                               </div>
                               {block.slots>=2&&<div style={{fontSize:8,color:p?.color,opacity:0.7}}>{block.slots*30}min</div>}
