@@ -491,6 +491,68 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
     if(!newExtra.trim()) return;
     const n=[...extraTasks,{text:newExtra,pid:1,id:Date.now()}];setExtraTasks(n);cloudSave("tt_extra",n);setNewExtra("");
   };
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing,  setImporting]  = useState(false);
+
+  const importFromCopilot = async () => {
+    if (!importText.trim()) return;
+    setImporting(true);
+    try {
+      const resp = await callAI(`Parse this Outlook calendar export into structured meeting data. The week starts on ${wk}.
+Each row has: Day, Start time, End time, Meeting title.
+Map each meeting to the correct day (Mon/Tue/Wed/Thu/Fri) and convert start time to a slot index where slot 0 = 7am, each slot = 30 min (so 8am = slot 2, 8:30am = slot 3, 9am = slot 4, etc).
+Calculate slots = Math.ceil((end_minutes - start_minutes) / 30) where minutes are from midnight.
+Return ONLY raw JSON array, no markdown:
+[{"day":"Mon","slotIndex":5,"slots":1,"text":"Meeting title","pid":1}]
+pid should always be 1.
+Calendar data:
+${importText}`);
+      const items = JSON.parse(resp.replace(/```json|```/g,"").trim());
+      const next = { ...gridBlocks };
+      items.forEach(item => {
+        const k = ck(item.day, item.slotIndex);
+        next[k] = { text: item.text, pid: item.pid||1, id: Date.now()+Math.random(), slots: Math.max(1, item.slots||1) };
+      });
+      setGridBlocks(next); cloudSave("tt_blocks", next);
+      setShowImport(false); setImportText("");
+    } catch(e) { console.error(e); }
+    setImporting(false);
+  };
+
+  const exportICS = () => {
+    const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Mihir Planner//EN","CALSCALE:GREGORIAN"];
+    // Map week day names to actual dates for current week
+    const weekStart = new Date(2026, 4, 4); // May 4 2026 as base
+    const weekIdx = WEEK_DATES.indexOf(wk);
+    const baseDate = new Date(2026, 4, 4 + weekIdx * 7);
+    DAYS.forEach((day, di) => {
+      const date = new Date(baseDate); date.setDate(baseDate.getDate() + di);
+      const dateStr = date.toISOString().slice(0,10).replace(/-/g,"");
+      for (let si = 0; si < HOURS.length * 2; si++) {
+        const b = gridBlocks[ck(day, si)];
+        if (!b) continue;
+        const startHour = 7 + Math.floor(si / 2);
+        const startMin  = (si % 2) * 30;
+        const endSi     = si + (b.slots || 1);
+        const endHour   = 7 + Math.floor(endSi / 2);
+        const endMin    = (endSi % 2) * 30;
+        const fmt = (h,m) => `${String(h).padStart(2,"0")}${String(m).padStart(2,"0")}00`;
+        lines.push("BEGIN:VEVENT",
+          `DTSTART:${dateStr}T${fmt(startHour,startMin)}`,
+          `DTEND:${dateStr}T${fmt(endHour,endMin)}`,
+          `SUMMARY:${b.text}`,
+          `UID:${Date.now()+Math.random()}@mihirplanner`,
+          "END:VEVENT");
+      }
+    });
+    lines.push("END:VCALENDAR");
+    const blob = new Blob([lines.join("\r\n")], {type:"text/calendar"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a"); a.href=url; a.download=`week-${wk.replace(" ","-")}.ics`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const occ={};
   DAYS.forEach(day=>{for(let si=0;si<HOURS.length*2;si++){const b=gridBlocks[ck(day,si)];if(b)for(let s=1;s<b.slots;s++)occ[`${day}-${si+s}`]=si;}});
 
@@ -515,8 +577,32 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       <SecHead title="Hour-by-Hour Timetable" sub="Drag tasks · Resize blocks · Click empty cell to add"/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
         <WNav week={week} setWeek={setWeek}/>
-        <div style={{display:"flex",gap:8}}><PBtn label="Sync Outlook" icon="📅"/><button onClick={print} style={bd}>⎙ Export for iPad</button></div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setShowImport(true)} style={{...bd,background:"#0078D4"}}>📥 Import from Copilot</button>
+          <button onClick={exportICS} style={{...bd,background:"#059669"}}>📤 Export to Outlook (.ics)</button>
+          <button onClick={print} style={bd}>⎙ Export for iPad</button>
+        </div>
       </div>
+
+      {/* Copilot Import Modal */}
+      {showImport && (
+        <div style={{background:"#F0F7FF",border:"1.5px solid #BFDBFE",borderRadius:12,padding:"20px",marginBottom:20}}>
+          <div style={{fontSize:14,fontWeight:800,color:"#1D4ED8",marginBottom:6}}>📥 Import from Copilot</div>
+          <div style={{fontSize:12,color:"#3B82F6",marginBottom:12,lineHeight:1.6}}>
+            Ask Copilot: <em>"List all my calendar meetings for this week. For each: day, start time, end time, and title only."</em> Then paste the result below.
+          </div>
+          <textarea value={importText} onChange={e=>setImportText(e.target.value)}
+            placeholder={"Paste Copilot calendar output here…\n\nMon 5/4  11:30 AM  11:55 AM  Fleet level AI powered insights\nTue 5/5  8:30 AM   8:55 AM   Crowding Microsoft Teams Meeting\n…"}
+            style={{width:"100%",minHeight:160,fontSize:12,border:"1.5px solid #93C5FD",borderRadius:8,padding:"10px 12px",resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box",color:"#374151",lineHeight:1.6}}/>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button onClick={importFromCopilot} disabled={importing}
+              style={{...bd,background:importing?"#9CA3AF":"#0078D4",cursor:importing?"not-allowed":"pointer"}}>
+              {importing?"⏳ Importing…":"✦ AI → Place on Timetable"}
+            </button>
+            <button onClick={()=>{setShowImport(false);setImportText("");}} style={bg}>Cancel</button>
+          </div>
+        </div>
+      )}
       <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
         <div style={{width:165,flexShrink:0}}>
           <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#6B7280",marginBottom:6}}>THIS WEEK'S TASKS</div>
