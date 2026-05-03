@@ -111,7 +111,12 @@ function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
       const p=gp(pid);
       const raw=await callAI(`Extract tasks from planning notes for "${p.label}" in ${YEAR}.\n\nMONTH INDEX MAPPING (use exactly these numbers):\nJanuary=0, February=1, March=2, April=3, May=4, June=5, July=6, August=7, September=8, October=9, November=10, December=11\n\nQUARTER MAPPING:\nQ1=months 0,1,2 set month=-1 quarter="Q1"\nQ2=months 3,4,5 set month=-1 quarter="Q2"\nQ3=months 6,7,8 set month=-1 quarter="Q3"\nQ4=months 9,10,11 set month=-1 quarter="Q4"\n\nRULES:\n- Specific month named: use exact index above\n- Only quarter mentioned: set month=-1 and fill quarter\n- No time mentioned: set month=-1 and quarter="Q1"\n- Always extract at least one task if there is any content\n\nReturn ONLY a JSON array, no markdown:\n[{"text":"task","month":3,"quarter":"Q2","pid":${pid}}]\n\nNotes: ${text}`);
       const items=JSON.parse(raw.replace(/\`\`\`json|\`\`\`/g,"").trim());
-      const n={...parsed,[pid]:items.map(i=>({...i,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4}))};
+      const existing=parsed[pid]||[];
+      const existingTexts=new Set(existing.map(i=>i.text.toLowerCase().trim()));
+      const newItems=items
+        .filter(i=>!existingTexts.has(i.text.toLowerCase().trim()))
+        .map(i=>({...i,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4}));
+      const n={...parsed,[pid]:[...existing,...newItems]};
       setParsed(n); cloudSave("annual_parsed",n);
     } catch(e){console.error(e);setAiError("AI parse failed. Try again.");}
     setLoading(null);
@@ -212,7 +217,7 @@ function WeekBar({task,onUpdate,onBarDragStart,onBarDragEnd}) {
   };
   return (
     <div draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData("movedTaskId",String(task.id));e.dataTransfer.setData("action","moveBar");onBarDragStart&&onBarDragStart(task.id);}} onDragEnd={()=>onBarDragEnd&&onBarDragEnd()}
-      style={{position:"absolute",left,top:3,width,height:20,background:p?.color,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"space-between",overflow:"hidden",zIndex:10,boxShadow:"0 1px 4px rgba(0,0,0,0.2)",userSelect:"none",cursor:"grab"}}>
+      style={{position:"absolute",left,top:3,width,height:20,background:p?.color,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"space-between",overflow:"hidden",zIndex:10,boxShadow:"0 1px 4px rgba(0,0,0,0.2)",userSelect:"none",cursor:"grab",opacity:0.82}}>
       <div onMouseDown={e=>resize("left",e)} style={{width:10,height:"100%",cursor:"ew-resize",background:"rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:7,color:"#fff"}}>◂</span></div>
       <span style={{fontSize:9,color:"#fff",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textAlign:"center",padding:"0 2px"}}>{task.text.length>20?task.text.slice(0,18)+"…":task.text}</span>
       <div onMouseDown={e=>resize("right",e)} style={{width:10,height:"100%",cursor:"ew-resize",background:"rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:7,color:"#fff"}}>▸</span></div>
@@ -282,7 +287,7 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                 <span style={{fontSize:11,color:p?.color,opacity:0.5}}>⠿</span>
                 <span style={{fontSize:12,color:p?.color}}>{task.text}</span>
                 <Pill pid={task.pid} small/>
-                <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,marginLeft:2}}>×</button>
+                <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);const w={...mergeTD};Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==task.id);});updM(w);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,marginLeft:2}}>×</button>
               </div>
             );})}
           </div>
@@ -316,15 +321,15 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                           if(wl){if(a==="moveBar"&&id)moveBar(Number(id),wl);else if(dragItem)schedule(dragItem,wl,month);}
                           setDropTarget(null);setDragItem(null);setDragBarId(null);
                         }}>
-                        <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:1,height:ROW_H,background:isOver?"#EFF6FF":"transparent",border:isOver?"2px dashed #2563EB":"2px solid transparent",borderRadius:6,padding:"2px",boxSizing:"border-box"}}>
+                        <div style={{display:"grid",gridTemplateColumns:`repeat(7,${DAY_W}px)`,gap:1,height:ROW_H,background:isOver?"#EFF6FF":"transparent",border:isOver?"2px dashed #2563EB":"2px solid transparent",borderRadius:6,padding:"2px",boxSizing:"border-box",position:"relative",zIndex:2}}>
                           {week.map((d,di)=>(
                             <div key={di} style={{height:"100%",padding:"2px 3px",background:d?"#FAFAFA":"transparent",border:d?"1px solid #F3F4F6":"none",borderRadius:3,display:"flex",flexDirection:"column"}}>
-                              {d&&<div style={{fontSize:9,color:"#9CA3AF",fontWeight:600}}>{d}</div>}
+                              {d&&<div style={{fontSize:9,color:"#374151",fontWeight:700,zIndex:3,position:"relative"}}>{d}</div>}
                             </div>
                           ))}
                         </div>
                         {wat.map(task=>(
-                          <div key={task.id} style={{position:"absolute",top:0,left:0,width:"100%",height:ROW_H,pointerEvents:"none"}}>
+                          <div key={task.id} style={{position:"absolute",top:0,left:0,width:"100%",height:ROW_H,pointerEvents:"none",zIndex:1}}>
                             <div style={{position:"relative",height:ROW_H,pointerEvents:"all"}}>
                               <WeekBar task={task} onUpdate={u=>updateBar(task.id,u)} onBarDragStart={id=>setDragBarId(id)} onBarDragEnd={()=>setDragBarId(null)}/>
                             </div>
@@ -344,7 +349,7 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                           <span style={{fontSize:12,color:p?.color,opacity:0.5}}>⠿</span>
                           <span style={{fontSize:12,color:p?.color,flex:1,lineHeight:1.3}}>{task.text}</span>
                           <Pill pid={task.pid} small/>
-                          <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1}}>×</button>
+                          <button onClick={e=>{e.stopPropagation();const n={...parsed};PRIORITIES.forEach(p=>{if(n[p.id])n[p.id]=n[p.id].filter(t=>t.id!==task.id);});updP(n);const w={...mergeTD};Object.keys(w).forEach(wk=>{w[wk]=(w[wk]||[]).filter(t=>t.id!==task.id);});updM(w);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1}}>×</button>
                         </div>
                       );})}
                     </div>
@@ -392,8 +397,12 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
   const [aiLoad,setAiLoad]=useState(false);
   const [newText,setNewText]=useState("");
   const [newPid,setNewPid]=useState(1);
-  const [editId,setEditId]=useState(null);
+  const [editId,setEditId]=useState(null);     // for This Week's Plan items only
   const [editVal,setEditVal]=useState("");
+  const [tdEditId,setTdEditId]=useState(null); // for td left column items only
+  const [tdEditVal,setTdEditVal]=useState("");
+  const [buEditId,setBuEditId]=useState(null); // for parsed bu tasks only
+  const [buEditVal,setBuEditVal]=useState("");
   const wk=WEEK_DATES[week];
   const td=mergeTD[wk]||[], bu=bottomUp[wk]||[];
   const all=[...td,...bu.filter(i=>!i.done)];
@@ -416,12 +425,22 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
     setAiLoad(false);
   };
   const toggleBU=id=>{const n={...bottomUp,[wk]:bu.map(i=>i.id===id?{...i,done:!i.done}:i)};setBottomUp(n);cloudSave("merge_bu",n);};
+  const saveBuEdit=item=>{
+    if(!buEditVal.trim()){setBuEditId(null);return;}
+    const n={...bottomUp,[wk]:bu.map(t=>t.id===item.id?{...t,text:buEditVal}:t)};
+    setBottomUp(n); cloudSave("merge_bu",n); setBuEditId(null);
+  };
   const saveEdit=item=>{
     if(!editVal.trim()){setEditId(null);return;}
     const inTD=td.find(t=>t.id===item.id);
     if(inTD){const n={...mergeTD,[wk]:td.map(t=>t.id===item.id?{...t,text:editVal}:t)};setMergeTD(n);cloudSave("merge_td",n);}
     else{const n={...bottomUp,[wk]:bu.map(t=>t.id===item.id?{...t,text:editVal}:t)};setBottomUp(n);cloudSave("merge_bu",n);}
     setEditId(null);
+  };
+  const saveTdEdit=item=>{
+    if(!tdEditVal.trim()){setTdEditId(null);return;}
+    const n={...mergeTD,[wk]:td.map(t=>t.id===item.id?{...t,text:tdEditVal}:t)};
+    setMergeTD(n); cloudSave("merge_td",n); setTdEditId(null);
   };
   const delItem=item=>{
     if(td.find(t=>t.id===item.id)){const n={...mergeTD,[wk]:td.filter(t=>t.id!==item.id)};setMergeTD(n);cloudSave("merge_td",n);}
@@ -432,19 +451,28 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
     <div>
       <SecHead title="Weekly Merge" sub="Top-down + bottom-up → this week's plan"/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-        <WNav week={week} setWeek={w=>{setWeek(w);setEditId(null);setEditVal("");}}/>
+        <WNav week={week} setWeek={w=>{setWeek(w);setEditId(null);setEditVal("");setBuEditId(null);setBuEditVal("");setTdEditId(null);setTdEditVal("");}}/>
         <PBtn label="Connect Outlook / Teams" icon="🔗"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
         <div style={{background:"#fff",border:"1.5px solid #E0E7FF",borderRadius:10,padding:"16px 18px"}}>
           <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",color:"#2563EB",marginBottom:10}}>↓ FROM ANNUAL PLAN</div>
           {td.length===0&&<div style={{fontSize:11,color:"#ccc",fontStyle:"italic",marginBottom:10}}>Drag tasks from Quarterly Calendar to populate, or add below.</div>}
-          {td.map(item=>{const p=gp(item.pid);return(
+          {td.map(item=>{const p=gp(item.pid),isEd=tdEditId===item.id;return(
             <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid #F3F4F6"}}>
               <div style={{width:6,height:6,borderRadius:"50%",background:p?.color,flexShrink:0}}/>
-              <span style={{fontSize:13,flex:1,color:"#374151"}}>{item.text}</span>
-              <Pill pid={item.pid} small/>
-              <button onClick={()=>delItem(item)} style={{background:"none",border:"none",cursor:"pointer",color:"#CBD5E1",fontSize:15,padding:0,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color="#EF4444"} onMouseLeave={e=>e.currentTarget.style.color="#CBD5E1"}>×</button>
+              {isEd?(
+                <input autoFocus value={tdEditVal} onChange={e=>setTdEditVal(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter")saveTdEdit(item);if(e.key==="Escape")setTdEditId(null);}}
+                  style={{flex:1,fontSize:13,padding:"3px 6px",border:"1.5px solid #2563EB",borderRadius:4,outline:"none",fontFamily:"inherit"}}/>
+              ):(
+                <span onDoubleClick={()=>{setTdEditId(item.id);setTdEditVal(item.text);}} style={{fontSize:13,flex:1,color:"#374151",cursor:"text"}}>{item.text}</span>
+              )}
+              {isEd?(
+                <button onClick={()=>saveTdEdit(item)} style={{...bd,fontSize:10,padding:"2px 8px"}}>✓</button>
+              ):(
+                <button onClick={()=>delItem(item)} style={{background:"none",border:"none",cursor:"pointer",color:"#CBD5E1",fontSize:15,padding:0,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color="#EF4444"} onMouseLeave={e=>e.currentTarget.style.color="#CBD5E1"}>×</button>
+              )}
             </div>
           );})}
           <div style={{display:"flex",gap:6,marginTop:12}}>
@@ -461,12 +489,21 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
           {bu.length>0&&(
             <div style={{marginTop:12}}>
               <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>PARSED TASKS</div>
-              {bu.map(item=>{const p=gp(item.pid);return(
-                <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",marginBottom:3,borderRadius:6,background:item.done?"#F9FAFB":p?.light||"#F9FAFB",border:`1px solid ${item.done?"#E5E7EB":p?.color+"33"||"#E5E7EB"}`}}>
-                  <input type="checkbox" checked={!!item.done} onChange={()=>toggleBU(item.id)} style={{cursor:"pointer",accentColor:p?.color,flexShrink:0}}/>
-                  <span style={{fontSize:12,flex:1,color:item.done?"#9CA3AF":"#374151",textDecoration:item.done?"line-through":"none"}}>{item.text}</span>
-                  {p&&<Pill pid={item.pid} small/>}
-                  <button onClick={()=>{const n={...bottomUp,[wk]:bu.filter(i=>i.id!==item.id)};setBottomUp(n);cloudSave("merge_bu",n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:14,padding:0,lineHeight:1}}>×</button>
+              {bu.map(item=>{const isEd=buEditId===item.id;return(
+                <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",marginBottom:3,borderRadius:6,background:item.done?"#F9FAFB":"#F8FAFF",border:`1px solid ${item.done?"#E5E7EB":"#DBEAFE"}`}}>
+                  <input type="checkbox" checked={!!item.done} onChange={()=>toggleBU(item.id)} style={{cursor:"pointer",flexShrink:0}}/>
+                  {isEd?(
+                    <input autoFocus value={buEditVal} onChange={e=>setBuEditVal(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter")saveBuEdit(item);if(e.key==="Escape")setBuEditId(null);}}
+                      style={{flex:1,fontSize:12,padding:"3px 6px",border:"1.5px solid #2563EB",borderRadius:4,outline:"none",fontFamily:"inherit"}}/>
+                  ):(
+                    <span onDoubleClick={()=>{setBuEditId(item.id);setBuEditVal(item.text);}} style={{fontSize:12,flex:1,color:item.done?"#9CA3AF":"#374151",textDecoration:item.done?"line-through":"none",cursor:"text"}}>{item.text}</span>
+                  )}
+                  {isEd?(
+                    <button onClick={()=>saveBuEdit(item)} style={{...bd,fontSize:10,padding:"2px 8px"}}>✓</button>
+                  ):(
+                    <button onClick={()=>{const n={...bottomUp,[wk]:bu.filter(i=>i.id!==item.id)};setBottomUp(n);cloudSave("merge_bu",n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:14,padding:0,lineHeight:1}}>×</button>
+                  )}
                 </div>
               );})}
               <div style={{display:"flex",gap:6,marginTop:8}}>
@@ -502,7 +539,6 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
               ):(
                 <span onClick={()=>{setEditId(item.id);setEditVal(item.text);}} style={{fontSize:13,flex:1,color:"#1e3a8a",cursor:"text"}}>{item.text}</span>
               )}
-              {!isEd&&<Pill pid={item.pid} small/>}
               {!isEd&&<button onClick={()=>delItem(item)} style={{background:"none",border:"none",cursor:"pointer",color:"#CBD5E1",fontSize:15,padding:0,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color="#EF4444"} onMouseLeave={e=>e.currentTarget.style.color="#CBD5E1"}>×</button>}
             </div>
           );})}
@@ -520,6 +556,8 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const [newExtra,setNewExtra]=useState("");
   const [inlineEdit,setInlineEdit]=useState(null);
   const [inlineVal,setInlineVal]=useState("");
+  const [panelEditId,setPanelEditId]=useState(null);
+  const [panelEditVal,setPanelEditVal]=useState("");
   const wk=WEEK_DATES[week];
   const td=mergeTD[wk]||[], bu=(lsGet("merge_bu",{})[wk]||[]).filter(i=>!i.done);
   const panel=[...td,...bu,...extraTasks];
@@ -541,6 +579,8 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       return;
     }
     if(!dragTask) return;
+    // Don't overwrite an existing block
+    if(gridBlocks[k]) return;
     const n={...gridBlocks,[k]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2,source:"manual"}};
     setGridBlocks(n); cloudSave("tt_blocks",n);
     const s=[...new Set([...scheduledIds,dragTask.id])]; setScheduledIds(s); cloudSave("tt_scheduled_ids",s);
@@ -560,9 +600,15 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
     if(!newExtra.trim()) return;
     const n=[...extraTasks,{text:newExtra,pid:1,id:Date.now()}];setExtraTasks(n);cloudSave("tt_extra",n);setNewExtra("");
   };
+  const savePanelEdit=(task)=>{
+    if(!panelEditVal.trim()){setPanelEditId(null);return;}
+    const n=extraTasks.map(t=>t.id===task.id?{...t,text:panelEditVal}:t);
+    setExtraTasks(n); cloudSave("tt_extra",n); setPanelEditId(null); setInlineEdit(null);
+  };
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [importing,  setImporting]  = useState(false);
+  const [importErr,  setImportErr]  = useState(false);
 
   const parseWithRegex = (text) => {
     const lines = text.trim().split("\n").filter(l => l.trim() && !l.includes("---") && !l.toLowerCase().startsWith("day"));
@@ -643,7 +689,7 @@ ${importText}`);
       const newSched = scheduledIds.filter(id => remainingIds.includes(id));
       setScheduledIds(newSched); cloudSave("tt_scheduled_ids", newSched);
       setShowImport(false); setImportText("");
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error(e); setImportErr(true); }
     setImporting(false);
   };
 
@@ -703,7 +749,7 @@ ${importText}`);
     <div>
       <SecHead title="Hour-by-Hour Timetable" sub="Drag tasks · Resize blocks · Click empty cell to add"/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
-        <WNav week={week} setWeek={setWeek}/>
+        <WNav week={week} setWeek={w=>{setWeek(w);setPanelEditId(null);setPanelEditVal("");setInlineEdit(null);setDragBlock(null);setDragTask(null);}}/>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setShowImport(true)} style={{...bd,background:"#0078D4"}}>📥 Import from Copilot</button>
           <button onClick={exportICS} style={{...bd,background:"#059669"}}>📤 Export to Outlook (.ics)</button>
@@ -721,12 +767,13 @@ ${importText}`);
           <textarea value={importText} onChange={e=>setImportText(e.target.value)}
             placeholder={"Paste Copilot calendar output here…\n\nMon 5/4  11:30 AM  11:55 AM  Fleet level AI powered insights\nTue 5/5  8:30 AM   8:55 AM   Crowding Microsoft Teams Meeting\n…"}
             style={{width:"100%",minHeight:160,fontSize:12,border:"1.5px solid #93C5FD",borderRadius:8,padding:"10px 12px",resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box",color:"#374151",lineHeight:1.6}}/>
-          <div style={{display:"flex",gap:8,marginTop:10}}>
-            <button onClick={importFromCopilot} disabled={importing}
+          <div style={{display:"flex",gap:8,marginTop:10,alignItems:"center"}}>
+            <button onClick={()=>{setImportErr(false);importFromCopilot();}} disabled={importing}
               style={{...bd,background:importing?"#9CA3AF":"#0078D4",cursor:importing?"not-allowed":"pointer"}}>
               {importing?"⏳ Importing…":"📥 Place on Timetable"}
             </button>
-            <button onClick={()=>{setShowImport(false);setImportText("");}} style={bg}>Cancel</button>
+            <button onClick={()=>{setShowImport(false);setImportText("");setImportErr(false);}} style={bg}>Cancel</button>
+            {importErr&&!importing&&<span style={{fontSize:11,color:"#EF4444"}}>Import failed. Check format and try again.</span>}
           </div>
         </div>
       )}
@@ -737,16 +784,23 @@ ${importText}`);
             <button onClick={()=>{setExtraTasks([]);cloudSave("tt_extra",[]);}} style={{fontSize:9,padding:"2px 6px",background:"#F3F4F6",border:"1px solid #E5E7EB",borderRadius:4,cursor:"pointer",color:"#9CA3AF",fontFamily:"inherit"}}>Clear</button>
           </div>
           <div style={{fontSize:10,color:"#9CA3AF",marginBottom:8,fontStyle:"italic"}}>Drag onto grid →</div>
-          {panel.map(task=>{const p=gp(task.pid),isSched=scheduledIds.includes(task.id);return(
-            <div key={task.id} draggable={!isSched} onDragStart={()=>!isSched&&setDragTask(task)} onDragEnd={()=>setDragTask(null)}
-              style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",marginBottom:3,borderRadius:6,background:isSched?"#F9FAFB":p?.light||"#F0FDF4",border:`1.5px solid ${isSched?"#E5E7EB":p?.color+"44"||"#D1FAE5"}`,cursor:isSched?"default":"grab",userSelect:"none",opacity:dragTask?.id===task.id?0.35:1}}>
-              <span style={{fontSize:10,opacity:0.4,color:p?.color}}>⠿</span>
-              <span style={{fontSize:11,flex:1,lineHeight:1.3,color:isSched?"#9CA3AF":p?.color||"#374151",textDecoration:isSched?"line-through":"none"}}>{task.text}</span>
-              {extraTasks.find(t=>t.id===task.id)&&(
-                <button onClick={e=>{e.stopPropagation();
-                  const n=extraTasks.filter(t=>t.id!==task.id);setExtraTasks(n);cloudSave("tt_extra",n);
-                }} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,flexShrink:0}}>×</button>
+          {panel.map(task=>{const p=gp(task.pid),isSched=scheduledIds.includes(task.id),isExtra=!!extraTasks.find(t=>t.id===task.id),isEd=panelEditId===task.id;return(
+            <div key={task.id} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",marginBottom:3,borderRadius:6,background:isSched?"#F9FAFB":p?.light||"#F0FDF4",border:`1.5px solid ${isSched?"#E5E7EB":p?.color+"44"||"#D1FAE5"}`,userSelect:"none"}}>
+              {!isEd&&<span style={{fontSize:10,opacity:0.4,color:p?.color}}>⠿</span>}
+              {isEd?(
+                <input autoFocus value={panelEditVal} onChange={e=>setPanelEditVal(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter")savePanelEdit(task);if(e.key==="Escape")setPanelEditId(null);}}
+                  style={{flex:1,fontSize:11,padding:"2px 6px",border:"1.5px solid #2563EB",borderRadius:4,outline:"none",fontFamily:"inherit"}}/>
+              ):(
+                <span draggable={!isSched} onDragStart={()=>!isSched&&setDragTask(task)} onDragEnd={()=>setDragTask(null)}
+                  onDoubleClick={()=>{if(isExtra){setPanelEditId(task.id);setPanelEditVal(task.text);}}}
+                  style={{fontSize:11,flex:1,lineHeight:1.3,color:isSched?"#9CA3AF":p?.color||"#374151",textDecoration:isSched?"line-through":"none",cursor:isSched?"default":isExtra?"text":"grab",opacity:dragTask?.id===task.id?0.35:1}}>{task.text}</span>
               )}
+              {isEd?(
+                <button onClick={()=>savePanelEdit(task)} style={{...bd,fontSize:9,padding:"2px 6px"}}>✓</button>
+              ):isExtra?(
+                <button onClick={e=>{e.stopPropagation();const n=extraTasks.filter(t=>t.id!==task.id);setExtraTasks(n);cloudSave("tt_extra",n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,flexShrink:0}}>×</button>
+              ):null}
             </div>
           );})}
           <div style={{marginTop:10,borderTop:"1px solid #F3F4F6",paddingTop:10}}>
@@ -822,7 +876,7 @@ ${importText}`);
                       <div key={si}
                         onDragOver={e=>e.preventDefault()}
                         onDrop={e=>{e.preventDefault();drop(day,si);}}
-                        onClick={()=>!inlineEdit&&(setInlineEdit(k),setInlineVal(""))}
+                        onClick={()=>{setPanelEditId(null);!inlineEdit&&(setInlineEdit(k),setInlineVal(""))}}
                         style={{position:"absolute",top:si*CELL_H,left:0,right:0,height:CELL_H,cursor:"pointer",zIndex:0}}>
                         {isEd&&(
                           <div onClick={e=>e.stopPropagation()} style={{padding:"2px 4px",zIndex:10,position:"relative",background:"#fff"}}>
