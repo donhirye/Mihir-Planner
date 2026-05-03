@@ -32,9 +32,10 @@ const getWeekLabel = (year, month, day) => {
 };
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
-const SUPA_URL = process.env.REACT_APP_SUPAURL;
-const SUPA_KEY = process.env.REACT_APP_SUPAKEY;
-const TABLE   = "mihir_planner";
+const SUPA_URL = process.env.REACT_APP_SUPAURL || "https://ggfqzxafrkicekfulceo.supabase.co";
+const SUPA_KEY = process.env.REACT_APP_SUPAKEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZnF6eGFmcmtpY2VrZnVsY2VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MzA5MDksImV4cCI6MjA5MzMwNjkwOX0.gSIxrR40RSooK53WrNmPZRBcoF2EKCqwvXbaEOKNlVM";
+const TABLE    = "mihir_planner";
+const SUPA_OK  = SUPA_URL.length > 0 && SUPA_KEY.length > 0;
 
 const supaHeaders = {
   "Content-Type": "application/json",
@@ -46,6 +47,7 @@ const supaHeaders = {
 // Async save to Supabase + sync to localStorage as cache
 const save = async (key, val) => {
   try { localStorage.setItem("mihir_" + key, JSON.stringify(val)); } catch {}
+  if (!SUPA_OK) return;
   try {
     await fetch(`${SUPA_URL}/rest/v1/${TABLE}`, {
       method: "POST",
@@ -63,15 +65,16 @@ const load = (key, fallback) => {
 
 // Async load from Supabase (call on mount to hydrate from cloud)
 const loadFromCloud = async (key, fallback) => {
+  if (!SUPA_OK) return load(key, fallback);
   try {
     const res = await fetch(
       `${SUPA_URL}/rest/v1/${TABLE}?key=eq.${key}&select=value`,
       { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
     );
+    if (!res.ok) return load(key, fallback);
     const rows = await res.json();
     if (rows && rows.length > 0) {
       const val = rows[0].value;
-      // Update local cache
       try { localStorage.setItem("mihir_" + key, JSON.stringify(val)); } catch {}
       return val;
     }
