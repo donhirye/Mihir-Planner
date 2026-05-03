@@ -1187,3 +1187,28 @@ export default function App() {
           </div>
         </div>
         <nav style={{ flex:1, padding:"16px 0" }}>
+          {NAV.map((n,i)=>(
+            <button key={n} onClick={()=>setScreen(i)} style={{ display:"flex", alignItems:"center", gap:10,
+              width:"100%", padding:"10px 20px", background:screen===i?"#1D4ED8":"none",
+              border:"none", cursor:"pointer", textAlign:"left", color:screen===i?"#fff":"#9CA3AF",
+              fontSize:12, fontFamily:"inherit", fontWeight:screen===i?700:400, transition:"all 0.1s" }}>
+              <span style={{ fontSize:14, opacity:0.8 }}>{ICONS[i]}</span>{n}
+            </button>
+          ))}
+        </nav>
+        <div style={{ padding:"16px 20px", borderTop:"1px solid #374151" }}>
+          <div style={{ fontSize:9, letterSpacing:"0.15em", color:"#6B7280", textTransform:"uppercase", marginBottom:10 }}>Streams</div>
+          {PRIORITIES.map(p=>(
+            <div key={p.id} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:6 }}>
+              <div style={{ width:6,height:6,borderRadius:"50%",background:p.color,flexShrink:0 }} />
+              <span style={{ fontSize:10, color:"#D1D5DB", lineHeight:1.3 }}>{p.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ flex:1, padding:"32px 28px", maxWidth:960, overflowY:"auto" }}>
+        {screens[screen]}
+      </div>
+    </div>
+  );
+}
