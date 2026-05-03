@@ -351,11 +351,8 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                   )}
                   <div style={{display:"flex",gap:5,marginBottom:8}}>
                     <input id={`q-add-${month}`} placeholder="Add task…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
-                      onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const apid=Number(document.getElementById(`q-pid-${month}`)?.value||PRIORITIES[0].id);const ni={text:e.target.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);e.target.value="";}}}/>
-                    <select id={`q-pid-${month}`} style={{fontSize:10,padding:"4px 4px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}>
-                      {PRIORITIES.map(p=><option key={p.id} value={p.id}>{p.short}</option>)}
-                    </select>
-                    <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const apid=Number(document.getElementById(`q-pid-${month}`)?.value||PRIORITIES[0].id);const ni={text:inp.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:10,padding:"4px 8px"}}>+</button>
+                      onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const apid=PRIORITIES[0].id;const ni={text:e.target.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);e.target.value="";}}}/>
+                    <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const apid=PRIORITIES[0].id;const ni={text:inp.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:10,padding:"4px 8px"}}>+</button>
                   </div>
                   {asgn.length>0&&(
                     <div>
