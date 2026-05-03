@@ -669,71 +669,90 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
             <button onClick={addExtra} style={{...bd,width:"100%",fontSize:11,padding:"5px 0"}}>+ Add to panel</button>
           </div>
         </div>
-        <div style={{flex:1,overflowX:isMobile?"auto":"hidden",width:"100%"}}>
-          <table style={{borderCollapse:"collapse",tableLayout:"fixed",width:"100%",minWidth:isMobile?500:"auto"}}>
-            <colgroup>
-              <col style={{width:46}}/>
-              {DAYS.map(d=><col key={d} style={{width:isMobile?"80px":"auto"}}/>)}
-            </colgroup>
-            <thead><tr>
-              <th style={{background:"#F9FAFB",border:"1px solid #E5E7EB",fontSize:9,color:"#6B7280",padding:"6px 0"}}></th>
-              {DAYS.map(d=><th key={d} style={{background:"#F9FAFB",border:"1px solid #E5E7EB",padding:"7px",fontSize:11,fontWeight:800,color:"#374151",letterSpacing:"0.08em"}}>{d}</th>)}
-            </tr></thead>
-            <tbody>
-              {HOURS.map(h=>[0,1].map(half=>{
-                const si=(h-7)*2+half, isH=half===0;
-                return (
-                  <tr key={`${h}-${half}`} style={{height:CELL_H}}>
-                    <td style={{fontSize:isH?11:10,fontWeight:isH?700:400,color:isH?"#374151":"#9CA3AF",textAlign:"right",padding:"0 8px",border:"1px solid #F3F4F6",background:"#F5F5F3",whiteSpace:"nowrap",verticalAlign:"top",paddingTop:4}}>
-                      {isH?(h<12?`${h}am`:h===12?"12pm":`${h-12}pm`):":30"}
-                    </td>
-                    {DAYS.map(day=>{
-                      const k=ck(day,si), block=gridBlocks[k], occBy=occ[`${day}-${si}`], isEd=inlineEdit===k;
-                      if(occBy!==undefined) return null;
-                      if(block){
-                        const p=gp(block.pid);
-                        return (
-                          <td key={day} rowSpan={block.slots} style={{border:"none",padding:"2px 2px 0 2px",verticalAlign:"top",background:"transparent",position:"relative",opacity:dragBlock?.key===k?0.4:1}}
-                            draggable
-                            onDragStart={e=>{e.stopPropagation();setDragBlock({key:k,day,si});}}
-                            onDragEnd={()=>setDragBlock(null)}>
-                            <div style={{background:p?.light||"#EFF6FF",border:`2px solid ${p?.color||"#2563EB"}`,borderRadius:4,height:block.slots*CELL_H-4,padding:"3px 6px",display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",cursor:"grab",position:"relative"}}>
-                              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
-                                <span style={{fontSize:10,color:p?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{block.text}</span>
-                                <button onClick={e=>{e.stopPropagation();remBlock(k);}} style={{background:"none",border:"none",cursor:"pointer",color:p?.color||"#2563EB",fontSize:11,padding:0,opacity:0.6,flexShrink:0}}>×</button>
-                              </div>
-                              {block.slots>=2&&<div style={{fontSize:8,color:p?.color||"#2563EB",opacity:0.7}}>{block.slots*30}min</div>}
-                              <div style={{position:"absolute",bottom:0,left:0,right:0,height:6,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
-                                onMouseDown={e=>{
-                                  e.preventDefault(); e.stopPropagation();
-                                  const sy=e.clientY,os=block.slots;
-                                  const mv=mv2=>{const ns=Math.max(1,Math.min(10,os+Math.round((mv2.clientY-sy)/CELL_H)));const n={...gridBlocks,[k]:{...block,slots:ns}};setGridBlocks(n);cloudSave("tt_blocks",n);};
-                                  const up=()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);};
-                                  window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);
-                                }}>
-                                <div style={{width:24,height:2,borderRadius:2,background:p?.color||"#2563EB",opacity:0.35}}/>
-                              </div>
-                            </div>
-                          </td>
-                        );
-                      }
+        <div style={{flex:1,overflowX:isMobile?"auto":"hidden",width:"100%",minWidth:isMobile?500:"auto"}}>
+          {/* Day headers */}
+          <div style={{display:"grid",gridTemplateColumns:`56px repeat(5,1fr)`,borderBottom:"1px solid #E5E7EB",background:"#F9FAFB"}}>
+            <div/>
+            {DAYS.map(d=><div key={d} style={{padding:"7px 0",textAlign:"center",fontSize:11,fontWeight:800,color:"#374151",letterSpacing:"0.08em"}}>{d}</div>)}
+          </div>
+          {/* Grid body */}
+          <div style={{position:"relative"}}>
+            {/* Hour lines — span full width including time column */}
+            {HOURS.map(h=>(
+              <div key={h} style={{position:"absolute",top:(h-7)*CELL_H*2,left:0,right:0,borderTop:"1px solid #D1D5DB",zIndex:2,pointerEvents:"none"}}>
+                <span style={{position:"absolute",top:-9,left:4,fontSize:11,fontWeight:700,color:"#374151",background:"#fff",paddingRight:4,lineHeight:1}}>
+                  {h<12?`${h}am`:h===12?"12pm":`${h-12}pm`}
+                </span>
+              </div>
+            ))}
+            {/* Half-hour lines */}
+            {HOURS.map(h=>(
+              <div key={`${h}h`} style={{position:"absolute",top:(h-7)*CELL_H*2+CELL_H,left:56,right:0,borderTop:"1px solid #F3F4F6",zIndex:1,pointerEvents:"none"}}/>
+            ))}
+            {/* Day columns */}
+            <div style={{display:"grid",gridTemplateColumns:`56px repeat(5,1fr)`,height:HOURS.length*CELL_H*2}}>
+              <div/> {/* time gutter */}
+              {DAYS.map(day=>(
+                <div key={day} style={{position:"relative",borderLeft:"1px solid #E5E7EB"}}>
+                  {/* Drop zones for each slot */}
+                  {HOURS.map(h=>[0,1].map(half=>{
+                    const si=(h-7)*2+half;
+                    const k=ck(day,si);
+                    const block=gridBlocks[k];
+                    const occBy=occ[`${day}-${si}`];
+                    const isEd=inlineEdit===k;
+                    if(occBy!==undefined) return null;
+                    if(block){
+                      const p=gp(block.pid);
                       return (
-                        <td key={day} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();drop(day,si);}} onClick={()=>!inlineEdit&&(setInlineEdit(k),setInlineVal(""))}
-                          style={{border:"none",borderTop:isH?"1px solid #D1D5DB":"1px solid #F3F4F6",background:"#fff",cursor:"pointer",verticalAlign:"top",padding:"1px 2px"}}>
-                          {isEd&&(
-                            <div onClick={e=>e.stopPropagation()} style={{padding:"2px 3px"}}>
-                              <input autoFocus value={inlineVal} onChange={e=>setInlineVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveInline(day,si);if(e.key==="Escape")setInlineEdit(null);}} placeholder="Task…" style={{width:"100%",fontSize:10,border:"1px solid #2563EB",borderRadius:3,padding:"2px 4px",outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
-                              <button onClick={()=>saveInline(day,si)} style={{marginTop:2,fontSize:9,padding:"1px 6px",background:"#111827",color:"#fff",border:"none",borderRadius:3,cursor:"pointer",fontFamily:"inherit"}}>✓</button>
-                            </div>
-                          )}
-                        </td>
+                        <div key={si}
+                          draggable
+                          onDragStart={e=>{e.stopPropagation();setDragBlock({key:k,day,si});}}
+                          onDragEnd={()=>setDragBlock(null)}
+                          style={{position:"absolute",top:si*CELL_H+2,left:2,right:2,height:block.slots*CELL_H-4,
+                            background:p?.light||"#EFF6FF",border:`1.5px solid ${p?.color||"#2563EB"}`,
+                            borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,
+                            display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",
+                            opacity:dragBlock?.key===k?0.4:1,boxSizing:"border-box"}}>
+                          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
+                            <span style={{fontSize:10,color:p?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{block.text}</span>
+                            <button onClick={e=>{e.stopPropagation();remBlock(k);}} style={{background:"none",border:"none",cursor:"pointer",color:p?.color||"#2563EB",fontSize:11,padding:0,opacity:0.6,flexShrink:0}}>×</button>
+                          </div>
+                          {block.slots>=2&&<div style={{fontSize:8,color:p?.color||"#2563EB",opacity:0.7}}>{block.slots*30}min</div>}
+                          <div style={{position:"absolute",bottom:0,left:0,right:0,height:6,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
+                            onMouseDown={e=>{
+                              e.preventDefault(); e.stopPropagation();
+                              const sy=e.clientY,os=block.slots;
+                              const mv=mv2=>{const ns=Math.max(1,Math.min(16,os+Math.round((mv2.clientY-sy)/CELL_H)));const n={...gridBlocks,[k]:{...block,slots:ns}};setGridBlocks(n);cloudSave("tt_blocks",n);};
+                              const up=()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);};
+                              window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);
+                            }}>
+                            <div style={{width:24,height:2,borderRadius:2,background:p?.color||"#2563EB",opacity:0.35}}/>
+                          </div>
+                        </div>
                       );
-                    })}
-                  </tr>
-                );
-              }))}
-            </tbody>
-          </table>
+                    }
+                    return (
+                      <div key={si}
+                        onDragOver={e=>e.preventDefault()}
+                        onDrop={e=>{e.preventDefault();drop(day,si);}}
+                        onClick={()=>!inlineEdit&&(setInlineEdit(k),setInlineVal(""))}
+                        style={{position:"absolute",top:si*CELL_H,left:0,right:0,height:CELL_H,cursor:"pointer",zIndex:0}}>
+                        {isEd&&(
+                          <div onClick={e=>e.stopPropagation()} style={{padding:"2px 4px",zIndex:10,position:"relative",background:"#fff"}}>
+                            <input autoFocus value={inlineVal} onChange={e=>setInlineVal(e.target.value)}
+                              onKeyDown={e=>{if(e.key==="Enter")saveInline(day,si);if(e.key==="Escape")setInlineEdit(null);}}
+                              placeholder="Task…" style={{width:"100%",fontSize:10,border:"1px solid #2563EB",borderRadius:3,padding:"2px 4px",outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+                            <button onClick={()=>saveInline(day,si)} style={{marginTop:2,fontSize:9,padding:"1px 6px",background:"#111827",color:"#fff",border:"none",borderRadius:3,cursor:"pointer",fontFamily:"inherit"}}>✓</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }))}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
