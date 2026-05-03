@@ -99,6 +99,7 @@ const callAI = async prompt => {
 function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
   const [open,setOpen]=useState(null);
   const [loading,setLoading]=useState(null);
+  const [aiError,setAiError]=useState(null);
   const [editPid,setEditPid]=useState(null);
   const [draft,setDraft]=useState("");
 
@@ -112,7 +113,7 @@ function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
       const items=JSON.parse(raw.replace(/\`\`\`json|\`\`\`/g,"").trim());
       const n={...parsed,[pid]:items.map(i=>({...i,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4}))};
       setParsed(n); cloudSave("annual_parsed",n);
-    } catch(e){console.error(e);}
+    } catch(e){console.error(e);setAiError("AI parse failed. Try again.");}
     setLoading(null);
   };
 
@@ -152,9 +153,12 @@ function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
                       </div>
                     )}
                     {freeform[p.id]&&editPid!==p.id&&(
-                      <button onClick={()=>parseAI(p.id)} disabled={loading===p.id} style={{marginTop:10,...bd,background:loading===p.id?"#9CA3AF":"#111827",cursor:loading===p.id?"not-allowed":"pointer"}}>
-                        {loading===p.id?"⏳ Parsing…":"✦ Parse with AI → Quarterly Calendar"}
-                      </button>
+                      <div>
+                        <button onClick={()=>{setAiError(null);parseAI(p.id);}} disabled={loading===p.id} style={{marginTop:10,...bd,background:loading===p.id?"#9CA3AF":"#111827",cursor:loading===p.id?"not-allowed":"pointer"}}>
+                          {loading===p.id?"⏳ Parsing…":"✦ Parse with AI → Quarterly Calendar"}
+                        </button>
+                        {aiError&&loading!==p.id&&<div style={{fontSize:11,color:"#EF4444",marginTop:6}}>{aiError}</div>}
+                      </div>
                     )}
                   </div>
                   {items.length>0&&(
@@ -164,23 +168,23 @@ function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
                         {items.map(item=>(
                           <div key={item.id} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:p.color,background:p.light,border:`1px solid ${p.color}33`,borderRadius:6,padding:"3px 9px"}}>
                             <span style={{color:"#9CA3AF",marginRight:4,fontSize:10}}>{item.month===-1?item.quarter:MONTHS[item.month]}</span>{item.text}
-                            <button onClick={()=>{const n={...parsed,[pid]:items.filter(i=>i.id!==item.id)};setParsed(n);cloudSave("annual_parsed",n);}} style={{background:"none",border:"none",cursor:"pointer",color:p.color,fontSize:12,padding:"0 0 0 4px",opacity:0.6,lineHeight:1}}>×</button>
+                            <button onClick={()=>{const n={...parsed,[p.id]:items.filter(i=>i.id!==item.id)};setParsed(n);cloudSave("annual_parsed",n);}} style={{background:"none",border:"none",cursor:"pointer",color:p.color,fontSize:12,padding:"0 0 0 4px",opacity:0.6,lineHeight:1}}>×</button>
                           </div>
                         ))}
                       </div>
                       <div style={{display:"flex",gap:6}}>
-                        <input id={`ann-add-${pid}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
-                          onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const newItem={text:e.target.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[...items,newItem]};setParsed(n);cloudSave("annual_parsed",n);e.target.value="";}}}/>
-                        <button onClick={()=>{const inp=document.getElementById(`ann-add-${pid}`);if(inp?.value.trim()){const newItem={text:inp.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[...items,newItem]};setParsed(n);cloudSave("annual_parsed",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
+                        <input id={`ann-add-${p.id}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                          onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const newItem={text:e.target.value.trim(),month:-1,quarter:"Q1",pid:p.id,id:Date.now()+Math.random()};const n={...parsed,[p.id]:[...items,newItem]};setParsed(n);cloudSave("annual_parsed",n);e.target.value="";}}}/>
+                        <button onClick={()=>{const inp=document.getElementById(`ann-add-${p.id}`);if(inp?.value.trim()){const newItem={text:inp.value.trim(),month:-1,quarter:"Q1",pid:p.id,id:Date.now()+Math.random()};const n={...parsed,[p.id]:[...items,newItem]};setParsed(n);cloudSave("annual_parsed",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
                       </div>
                     </div>
                   )}
                   {items.length===0&&(
                     <div style={{padding:"12px 18px",borderTop:`1px solid ${p.color}22`}}>
                       <div style={{display:"flex",gap:6}}>
-                        <input id={`ann-add-${pid}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
-                          onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const newItem={text:e.target.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[newItem]};setParsed(n);cloudSave("annual_parsed",n);e.target.value="";}}}/>
-                        <button onClick={()=>{const inp=document.getElementById(`ann-add-${pid}`);if(inp?.value.trim()){const newItem={text:inp.value.trim(),month:-1,quarter:"Q1",pid,id:Date.now()+Math.random()};const n={...parsed,[pid]:[newItem]};setParsed(n);cloudSave("annual_parsed",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
+                        <input id={`ann-add-${p.id}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                          onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const newItem={text:e.target.value.trim(),month:-1,quarter:"Q1",pid:p.id,id:Date.now()+Math.random()};const n={...parsed,[p.id]:[newItem]};setParsed(n);cloudSave("annual_parsed",n);e.target.value="";}}}/>
+                        <button onClick={()=>{const inp=document.getElementById(`ann-add-${p.id}`);if(inp?.value.trim()){const newItem={text:inp.value.trim(),month:-1,quarter:"Q1",pid:p.id,id:Date.now()+Math.random()};const n={...parsed,[p.id]:[newItem]};setParsed(n);cloudSave("annual_parsed",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
                       </div>
                     </div>
                   )}
@@ -347,8 +351,11 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
                   )}
                   <div style={{display:"flex",gap:5,marginBottom:8}}>
                     <input id={`q-add-${month}`} placeholder="Add task…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
-                      onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const pid=PRIORITIES[0].id;const ni={text:e.target.value.trim(),month,quarter:ql,pid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[pid]:[...(parsed[pid]||[]),ni]};updP(n);e.target.value="";}}}/>
-                    <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const pid=PRIORITIES[0].id;const ni={text:inp.value.trim(),month,quarter:ql,pid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[pid]:[...(parsed[pid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:10,padding:"4px 8px"}}>+</button>
+                      onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const apid=Number(document.getElementById(`q-pid-${month}`)?.value||PRIORITIES[0].id);const ni={text:e.target.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);e.target.value="";}}}/>
+                    <select id={`q-pid-${month}`} style={{fontSize:10,padding:"4px 4px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}>
+                      {PRIORITIES.map(p=><option key={p.id} value={p.id}>{p.short}</option>)}
+                    </select>
+                    <button onClick={()=>{const inp=document.getElementById(`q-add-${month}`);if(inp?.value.trim()){const apid=Number(document.getElementById(`q-pid-${month}`)?.value||PRIORITIES[0].id);const ni={text:inp.value.trim(),month,quarter:ql,pid:apid,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4};const n={...parsed,[apid]:[...(parsed[apid]||[]),ni]};updP(n);inp.value="";}}} style={{...bd,fontSize:10,padding:"4px 8px"}}>+</button>
                   </div>
                   {asgn.length>0&&(
                     <div>
@@ -394,6 +401,7 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
   const td=mergeTD[wk]||[], bu=bottomUp[wk]||[];
   const all=[...td,...bu.filter(i=>!i.done)];
 
+  const [buAiErr,setBuAiErr]=useState(false);
   const addTD=()=>{
     if(!newText.trim()) return;
     const n={...mergeTD,[wk]:[...td,{text:newText,pid:newPid,id:Date.now(),fromAnnual:false}]};
@@ -401,13 +409,13 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
   };
   const parseBU=async()=>{
     const raw=buRaw[wk]||""; if(!raw.trim()) return;
-    setAiLoad(true);
+    setAiLoad(true); setBuAiErr(false);
     try {
       const resp=await callAI(`Convert rough notes into clean action items (under 12 words). Assign pid: ${PRIORITIES.map(p=>`${p.id}=${p.label}`).join(", ")}. Return ONLY JSON:\n[{"text":"item","pid":1}]\nNotes: ${raw}`);
       const items=JSON.parse(resp.replace(/\`\`\`json|\`\`\`/g,"").trim());
       const n={...bottomUp,[wk]:items.map(i=>({...i,id:Date.now()+Math.random(),done:false}))};
       setBottomUp(n); cloudSave("merge_bu",n);
-    } catch(e){console.error(e);}
+    } catch(e){console.error(e);setBuAiErr(true);}
     setAiLoad(false);
   };
   const toggleBU=id=>{const n={...bottomUp,[wk]:bu.map(i=>i.id===id?{...i,done:!i.done}:i)};setBottomUp(n);cloudSave("merge_bu",n);};
@@ -427,7 +435,7 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
     <div>
       <SecHead title="Weekly Merge" sub="Top-down + bottom-up → this week's plan"/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-        <WNav week={week} setWeek={setWeek}/>
+        <WNav week={week} setWeek={w=>{setWeek(w);setEditId(null);setEditVal("");}}/>
         <PBtn label="Connect Outlook / Teams" icon="🔗"/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
@@ -439,6 +447,7 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
               <div style={{width:6,height:6,borderRadius:"50%",background:p?.color,flexShrink:0}}/>
               <span style={{fontSize:13,flex:1,color:"#374151"}}>{item.text}</span>
               <Pill pid={item.pid} small/>
+              <button onClick={()=>delItem(item)} style={{background:"none",border:"none",cursor:"pointer",color:"#CBD5E1",fontSize:15,padding:0,lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color="#EF4444"} onMouseLeave={e=>e.currentTarget.style.color="#CBD5E1"}>×</button>
             </div>
           );})}
           <div style={{display:"flex",gap:6,marginTop:12}}>
@@ -451,6 +460,7 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
           <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.12em",color:"#D97706",marginBottom:10}}>↑ FROM EMAIL / VERBAL</div>
           <textarea value={buRaw[wk]||""} onChange={e=>{const n={...buRaw,[wk]:e.target.value};setBuRaw(n);cloudSave("merge_bu_raw",n);}} placeholder={"Paste emails or type tasks…"} style={{width:"100%",minHeight:120,fontSize:12,border:"1.5px solid #FDE68A",borderRadius:8,padding:"10px 12px",resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box",color:"#374151",lineHeight:1.6}}/>
           <button onClick={parseBU} disabled={aiLoad} style={{marginTop:8,...bd,background:aiLoad?"#9CA3AF":"#D97706",cursor:aiLoad?"not-allowed":"pointer"}}>{aiLoad?"⏳ Parsing…":"✦ AI → Clean Task List"}</button>
+          {buAiErr&&!aiLoad&&<div style={{fontSize:11,color:"#EF4444",marginTop:6}}>AI failed. Try again or add items manually.</div>}
           {bu.length>0&&(
             <div style={{marginTop:12}}>
               <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#9CA3AF",marginBottom:6}}>PARSED TASKS</div>
@@ -463,18 +473,18 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
                 </div>
               );})}
               <div style={{display:"flex",gap:6,marginTop:8}}>
-                <input id="bu-add" placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                <input id={`bu-add-${wk}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
                   onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const ni={text:e.target.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[...bu,ni]};setBottomUp(n);cloudSave("merge_bu",n);e.target.value="";}}}/>
-                <button onClick={()=>{const inp=document.getElementById("bu-add");if(inp?.value.trim()){const ni={text:inp.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[...bu,ni]};setBottomUp(n);cloudSave("merge_bu",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
+                <button onClick={()=>{const inp=document.getElementById(`bu-add-${wk}`);if(inp?.value.trim()){const ni={text:inp.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[...bu,ni]};setBottomUp(n);cloudSave("merge_bu",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
               </div>
             </div>
           )}
           {bu.length===0&&(
             <div style={{marginTop:12}}>
               <div style={{display:"flex",gap:6}}>
-                <input id="bu-add" placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
+                <input id={`bu-add-${wk}`} placeholder="Add item manually…" style={{flex:1,fontSize:11,padding:"4px 8px",border:"1px solid #E5E7EB",borderRadius:6,outline:"none",fontFamily:"inherit"}}
                   onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const ni={text:e.target.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[ni]};setBottomUp(n);cloudSave("merge_bu",n);e.target.value="";}}}/>
-                <button onClick={()=>{const inp=document.getElementById("bu-add");if(inp?.value.trim()){const ni={text:inp.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[ni]};setBottomUp(n);cloudSave("merge_bu",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
+                <button onClick={()=>{const inp=document.getElementById(`bu-add-${wk}`);if(inp?.value.trim()){const ni={text:inp.value.trim(),pid:1,id:Date.now()+Math.random(),done:false};const n={...bottomUp,[wk]:[ni]};setBottomUp(n);cloudSave("merge_bu",n);inp.value="";}}} style={{...bd,fontSize:11,padding:"4px 10px"}}>+ Add</button>
               </div>
             </div>
           )}
@@ -631,6 +641,10 @@ ${importText}`);
         next[k] = { text: item.text, pid: 1, id: Date.now() + Math.random(), slots: Math.max(1, item.slots||1), source: "outlook" };
       });
       setGridBlocks(next); cloudSave("tt_blocks", next);
+      // Clear scheduledIds for any outlook blocks that were replaced
+      const remainingIds = Object.values(next).filter(b=>b.source==="manual").map(b=>b.id);
+      const newSched = scheduledIds.filter(id => remainingIds.includes(id));
+      setScheduledIds(newSched); cloudSave("tt_scheduled_ids", newSched);
       setShowImport(false); setImportText("");
     } catch(e) { console.error(e); }
     setImporting(false);
@@ -731,7 +745,11 @@ ${importText}`);
               style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",marginBottom:3,borderRadius:6,background:isSched?"#F9FAFB":p?.light||"#F0FDF4",border:`1.5px solid ${isSched?"#E5E7EB":p?.color+"44"||"#D1FAE5"}`,cursor:isSched?"default":"grab",userSelect:"none",opacity:dragTask?.id===task.id?0.35:1}}>
               <span style={{fontSize:10,opacity:0.4,color:p?.color}}>⠿</span>
               <span style={{fontSize:11,flex:1,lineHeight:1.3,color:isSched?"#9CA3AF":p?.color||"#374151",textDecoration:isSched?"line-through":"none"}}>{task.text}</span>
-              <button onClick={e=>{e.stopPropagation();const n=extraTasks.filter(t=>t.id!==task.id);setExtraTasks(n);cloudSave("tt_extra",n);}} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,flexShrink:0}}>×</button>
+              {extraTasks.find(t=>t.id===task.id)&&(
+                <button onClick={e=>{e.stopPropagation();
+                  const n=extraTasks.filter(t=>t.id!==task.id);setExtraTasks(n);cloudSave("tt_extra",n);
+                }} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:13,padding:0,lineHeight:1,flexShrink:0}}>×</button>
+              )}
             </div>
           );})}
           <div style={{marginTop:10,borderTop:"1px solid #F3F4F6",paddingTop:10}}>
@@ -864,20 +882,21 @@ function RetroCard({item,sectionKey,borderColor,editingId,setEditingId,editVal,s
 function RetroScreen({rawNotes,setRawNotes,organized,setOrganized}) {
   const [week,setWeek]=useState(0);
   const [loading,setLoading]=useState(false);
+  const [retroErr,setRetroErr]=useState(false);
   const [editingId,setEditingId]=useState(null);
   const [editVal,setEditVal]=useState("");
   const wk=WEEK_DATES[week];
 
   const organize=async()=>{
     const raw=rawNotes[wk]||""; if(!raw.trim()) return;
-    setLoading(true);
+    setLoading(true); setRetroErr(false);
     try {
       const resp=await callAI(`Organize weekly notes into retro. Streams: ${PRIORITIES.map(p=>p.label).join(", ")}, Other.\nReturn ONLY JSON:\n{"got_done":[{"text":"item","stream":"Customer Engagements"}],"not_done":[{"text":"item","stream":"CDS"}],"lessons":[{"text":"lesson","stream":"Other"}]}\nNotes: ${raw}`);
       const p=JSON.parse(resp.replace(/\`\`\`json|\`\`\`/g,"").trim());
       const ai=arr=>(arr||[]).map(i=>({...i,id:Date.now()+Math.random()}));
       const n={...organized,[wk]:{got_done:ai(p.got_done),not_done:ai(p.not_done),lessons:ai(p.lessons)}};
       setOrganized(n); cloudSave("retro_org",n);
-    } catch(e){console.error(e);}
+    } catch(e){console.error(e);setRetroErr(true);}
     setLoading(false);
   };
   const del=(sec,id)=>{
@@ -906,12 +925,13 @@ function RetroScreen({rawNotes,setRawNotes,organized,setOrganized}) {
   return (
     <div>
       <SecHead title="Weekly Retro" sub="Dump your notes · AI organizes · Click to edit · × to delete"/>
-      <WNav week={week} setWeek={setWeek}/>
+      <WNav week={week} setWeek={w=>{setWeek(w);setEditingId(null);setEditVal("");}}/>
       <div style={{display:"grid",gridTemplateColumns:org?"1fr 1fr":"1fr",gap:16,marginTop:16}}>
         <div>
           <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#6B7280",marginBottom:8}}>YOUR RAW NOTES</div>
           <textarea value={rawNotes[wk]||""} onChange={e=>{const n={...rawNotes,[wk]:e.target.value};setRawNotes(n);cloudSave("retro_raw",n);}} placeholder={"Dump everything here…"} style={{width:"100%",minHeight:280,fontSize:13,border:"1.5px solid #E5E7EB",borderRadius:10,padding:"14px",resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box",color:"#374151",lineHeight:1.7,background:"#fff"}}/>
           <button onClick={organize} disabled={loading} style={{marginTop:10,...bd,background:loading?"#9CA3AF":"#111827",cursor:loading?"not-allowed":"pointer",fontSize:13,padding:"9px 20px"}}>{loading?"⏳ Organizing…":"✦ Clearly Organize with AI"}</button>
+          {retroErr&&!loading&&<div style={{fontSize:11,color:"#EF4444",marginTop:6}}>AI failed. Try again.</div>}
         </div>
         {org&&(
           <div>
