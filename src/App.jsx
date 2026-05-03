@@ -984,6 +984,56 @@ const TimetableScreen = ({ mergeTD, gridBlocks, updateGridBlocks, extraTasks, up
   );
 };
 
+const streamColor = label => { const p=PRIORITIES.find(p=>p.label===label); return p?.color||"#6B7280"; };
+const streamLight = label => { const p=PRIORITIES.find(p=>p.label===label); return p?.light||"#F3F4F6"; };
+
+const RetroSection = ({ title, icon, sectionKey, borderColor, org, editingId, setEditingId, editVal, setEditVal, saveEdit, deleteCard }) => {
+  if (!org) return null;
+  const items = org[sectionKey] || []; if (!items.length) return null;
+  return (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontSize:11, fontWeight:800, letterSpacing:"0.1em", color:borderColor, marginBottom:8 }}>{icon} {title}</div>
+      {items.map(item=>{
+        const isEd = editingId===item.id;
+        return (
+          <div key={item.id} style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"8px 12px",
+            marginBottom:5, borderRadius:8, background:streamLight(item.stream),
+            border:`1px solid ${streamColor(item.stream)}33` }}>
+            <span style={{ fontSize:12, marginTop:2, color:borderColor, flexShrink:0 }}>{icon}</span>
+            <div style={{ flex:1 }}>
+              {isEd ? (
+                <div>
+                  <textarea autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Escape") setEditingId(null); }}
+                    style={{ width:"100%", minHeight:70, fontSize:12, padding:"6px 8px",
+                      border:`1.5px solid ${streamColor(item.stream)}`, borderRadius:6,
+                      outline:"none", fontFamily:"inherit", boxSizing:"border-box",
+                      resize:"vertical", lineHeight:1.6, color:"#374151" }} />
+                  <div style={{ display:"flex", gap:6, marginTop:4 }}>
+                    <button onClick={()=>saveEdit(sectionKey,item.id)} style={{...btnDark,fontSize:10,padding:"3px 10px"}}>Save</button>
+                    <button onClick={()=>setEditingId(null)} style={{...btnGray,fontSize:10,padding:"3px 10px"}}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <span onClick={()=>{ setEditingId(item.id); setEditVal(item.text); }}
+                  style={{ fontSize:13, color:"#374151", lineHeight:1.5, cursor:"text", display:"block" }}>{item.text}</span>
+              )}
+            </div>
+            <span style={{ fontSize:9, color:streamColor(item.stream), background:"#fff",
+              border:`1px solid ${streamColor(item.stream)}44`, borderRadius:10, padding:"1px 8px",
+              whiteSpace:"nowrap", alignSelf:"flex-start", marginTop:2 }}>{item.stream}</span>
+            <button onClick={()=>deleteCard(sectionKey,item.id)}
+              style={{ background:"none", border:"none", cursor:"pointer", color:"#D1D5DB",
+                fontSize:15, padding:0, lineHeight:1, alignSelf:"flex-start", flexShrink:0 }}
+              onMouseEnter={e=>e.currentTarget.style.color="#EF4444"}
+              onMouseLeave={e=>e.currentTarget.style.color="#D1D5DB"}>×</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // ─── SCREEN 5: RETRO ──────────────────────────────────────────────────────────
 const RetroScreen = ({ rawNotes, updateRawNotes, organized, updateOrganized }) => {
   const [week,      setWeek]      = useState(0);
@@ -1021,58 +1071,6 @@ Notes: ${raw}`);
     setEditingId(null);
   };
 
-  const streamColor = label => { const p=PRIORITIES.find(p=>p.label===label); return p?.color||"#6B7280"; };
-  const streamLight = label => { const p=PRIORITIES.find(p=>p.label===label); return p?.light||"#F3F4F6"; };
-
-  const RetroSection = ({ title, icon, sectionKey, borderColor }) => {
-    const org = organized[wk]; if (!org) return null;
-    const items = org[sectionKey] || []; if (!items.length) return null;
-    return (
-      <div style={{ marginBottom:16 }}>
-        <div style={{ fontSize:11, fontWeight:800, letterSpacing:"0.1em", color:borderColor, marginBottom:8 }}>{icon} {title}</div>
-        {items.map(item=>{
-          const isEd = editingId===item.id;
-          return (
-            <div key={item.id} style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"8px 12px",
-              marginBottom:5, borderRadius:8, background:streamLight(item.stream),
-              border:`1px solid ${streamColor(item.stream)}33` }}>
-              <span style={{ fontSize:12, marginTop:2, color:borderColor, flexShrink:0 }}>{icon}</span>
-              <div style={{ flex:1 }}>
-                {isEd ? (
-                  <div>
-                    {/* Full textarea for editing — shows entire comment */}
-                    <textarea autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)}
-                      onKeyDown={e=>{ if(e.key==="Escape") setEditingId(null); }}
-                      style={{ width:"100%", minHeight:70, fontSize:12, padding:"6px 8px",
-                        border:`1.5px solid ${streamColor(item.stream)}`, borderRadius:6,
-                        outline:"none", fontFamily:"inherit", boxSizing:"border-box",
-                        resize:"vertical", lineHeight:1.6, color:"#374151" }} />
-                    <div style={{ display:"flex", gap:6, marginTop:4 }}>
-                      <button onClick={()=>saveEdit(sectionKey,item.id)} style={{...btnDark,fontSize:10,padding:"3px 10px"}}>Save</button>
-                      <button onClick={()=>setEditingId(null)} style={{...btnGray,fontSize:10,padding:"3px 10px"}}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <span onClick={()=>{ setEditingId(item.id); setEditVal(item.text); }}
-                    style={{ fontSize:13, color:"#374151", lineHeight:1.5, cursor:"text", display:"block" }}>{item.text}</span>
-                )}
-              </div>
-              <span style={{ fontSize:9, color:streamColor(item.stream), background:"#fff",
-                border:`1px solid ${streamColor(item.stream)}44`, borderRadius:10, padding:"1px 8px",
-                whiteSpace:"nowrap", alignSelf:"flex-start", marginTop:2 }}>{item.stream}</span>
-              <button onClick={()=>deleteCard(sectionKey,item.id)}
-                style={{ background:"none", border:"none", cursor:"pointer", color:"#D1D5DB",
-                  fontSize:15, padding:0, lineHeight:1, alignSelf:"flex-start", flexShrink:0,
-                  transition:"color 0.1s" }}
-                onMouseEnter={e=>e.currentTarget.style.color="#EF4444"}
-                onMouseLeave={e=>e.currentTarget.style.color="#D1D5DB"}>×</button>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
   const org = organized[wk];
 
   return (
@@ -1098,9 +1096,9 @@ Notes: ${raw}`);
           <div>
             <div style={{ fontSize:10, fontWeight:800, letterSpacing:"0.1em", color:"#6B7280", marginBottom:4 }}>ORGANIZED — week of {wk}</div>
             <div style={{ fontSize:10, color:"#9CA3AF", fontStyle:"italic", marginBottom:12 }}>Click any item to edit · × to delete</div>
-            <RetroSection title="GOT DONE"        icon="✓" sectionKey="got_done" borderColor="#059669" />
-            <RetroSection title="DIDN'T GET DONE" icon="○" sectionKey="not_done" borderColor="#DC2626" />
-            <RetroSection title="LESSONS LEARNED" icon="→" sectionKey="lessons"  borderColor="#D97706" />
+            <RetroSection title="GOT DONE"        icon="✓" sectionKey="got_done" borderColor="#059669" org={org} editingId={editingId} setEditingId={setEditingId} editVal={editVal} setEditVal={setEditVal} saveEdit={saveEdit} deleteCard={deleteCard} />
+            <RetroSection title="DIDN'T GET DONE" icon="○" sectionKey="not_done" borderColor="#DC2626" org={org} editingId={editingId} setEditingId={setEditingId} editVal={editVal} setEditVal={setEditVal} saveEdit={saveEdit} deleteCard={deleteCard} />
+            <RetroSection title="LESSONS LEARNED" icon="→" sectionKey="lessons"  borderColor="#D97706" org={org} editingId={editingId} setEditingId={setEditingId} editVal={editVal} setEditVal={setEditVal} saveEdit={saveEdit} deleteCard={deleteCard} />
           </div>
         )}
       </div>
@@ -1189,28 +1187,3 @@ export default function App() {
           </div>
         </div>
         <nav style={{ flex:1, padding:"16px 0" }}>
-          {NAV.map((n,i)=>(
-            <button key={n} onClick={()=>setScreen(i)} style={{ display:"flex", alignItems:"center", gap:10,
-              width:"100%", padding:"10px 20px", background:screen===i?"#1D4ED8":"none",
-              border:"none", cursor:"pointer", textAlign:"left", color:screen===i?"#fff":"#9CA3AF",
-              fontSize:12, fontFamily:"inherit", fontWeight:screen===i?700:400, transition:"all 0.1s" }}>
-              <span style={{ fontSize:14, opacity:0.8 }}>{ICONS[i]}</span>{n}
-            </button>
-          ))}
-        </nav>
-        <div style={{ padding:"16px 20px", borderTop:"1px solid #374151" }}>
-          <div style={{ fontSize:9, letterSpacing:"0.15em", color:"#6B7280", textTransform:"uppercase", marginBottom:10 }}>Streams</div>
-          {PRIORITIES.map(p=>(
-            <div key={p.id} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:6 }}>
-              <div style={{ width:6,height:6,borderRadius:"50%",background:p.color,flexShrink:0 }} />
-              <span style={{ fontSize:10, color:"#D1D5DB", lineHeight:1.3 }}>{p.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={{ flex:1, padding:"32px 28px", maxWidth:960, overflowY:"auto" }}>
-        {screens[screen]}
-      </div>
-    </div>
-  );
-}
