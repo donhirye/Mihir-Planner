@@ -625,11 +625,6 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
         <WNav week={week} setWeek={setWeek}/>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setShowImport(true)} style={{...bd,background:"#0078D4"}}>📥 Import from Copilot</button>
-          <button onClick={()=>{
-            const next={};
-            Object.keys(gridBlocks).forEach(k=>{if(gridBlocks[k].source==="manual")next[k]=gridBlocks[k];});
-            setGridBlocks(next); cloudSave("tt_blocks",next);
-          }} style={{...bd,background:"#6B7280",fontSize:11}}>🗑 Clear Outlook Meetings</button>
           <button onClick={exportICS} style={{...bd,background:"#059669"}}>📤 Export to Outlook (.ics)</button>
           <button onClick={print} style={bd}>⎙ Export for iPad</button>
         </div>
@@ -656,7 +651,10 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       )}
       <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
         <div style={{width:165,flexShrink:0}}>
-          <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#6B7280",marginBottom:6}}>THIS WEEK'S TASKS</div>
+          <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:"#6B7280",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            THIS WEEK'S TASKS
+            <button onClick={()=>{setExtraTasks([]);cloudSave("tt_extra",[]);}} style={{fontSize:9,padding:"2px 6px",background:"#F3F4F6",border:"1px solid #E5E7EB",borderRadius:4,cursor:"pointer",color:"#9CA3AF",fontFamily:"inherit"}}>Clear</button>
+          </div>
           <div style={{fontSize:10,color:"#9CA3AF",marginBottom:8,fontStyle:"italic"}}>Drag onto grid →</div>
           {panel.map(task=>{const p=gp(task.pid),isSched=scheduledIds.includes(task.id);return(
             <div key={task.id} draggable={!isSched} onDragStart={()=>!isSched&&setDragTask(task)} onDragEnd={()=>setDragTask(null)}
@@ -695,19 +693,17 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                       if(block){
                         const p=gp(block.pid);
                         return (
-                          <td key={day} rowSpan={block.slots} style={{border:`2px solid ${p?.color||"#E5E7EB"}`,padding:0,verticalAlign:"top",background:p?.light||"#F0FDF4",position:"relative",overflow:"visible",opacity:dragBlock?.key===k?0.4:1}}
+                          <td key={day} rowSpan={block.slots} style={{border:"none",padding:"2px 2px 0 2px",verticalAlign:"top",background:"transparent",position:"relative",opacity:dragBlock?.key===k?0.4:1}}
                             draggable
                             onDragStart={e=>{e.stopPropagation();setDragBlock({key:k,day,si});}}
                             onDragEnd={()=>setDragBlock(null)}>
-                            <div style={{position:"relative",height:block.slots*CELL_H-4,padding:"3px 6px",display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",cursor:"grab"}}>
+                            <div style={{background:p?.light||"#EFF6FF",border:`2px solid ${p?.color||"#2563EB"}`,borderRadius:4,height:block.slots*CELL_H-4,padding:"3px 6px",display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",cursor:"grab",position:"relative"}}>
                               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
-                                <span style={{fontSize:10,color:p?.color,fontWeight:700,lineHeight:1.3,flex:1}}>
-                                  {block.text}
-                                </span>
-                                <button onClick={e=>{e.stopPropagation();remBlock(k);}} style={{background:"none",border:"none",cursor:"pointer",color:p?.color,fontSize:11,padding:0,opacity:0.5,flexShrink:0}}>×</button>
+                                <span style={{fontSize:10,color:p?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{block.text}</span>
+                                <button onClick={e=>{e.stopPropagation();remBlock(k);}} style={{background:"none",border:"none",cursor:"pointer",color:p?.color||"#2563EB",fontSize:11,padding:0,opacity:0.6,flexShrink:0}}>×</button>
                               </div>
-                              {block.slots>=2&&<div style={{fontSize:8,color:p?.color,opacity:0.7}}>{block.slots*30}min</div>}
-                              <div style={{position:"absolute",bottom:0,left:0,right:0,height:8,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
+                              {block.slots>=2&&<div style={{fontSize:8,color:p?.color||"#2563EB",opacity:0.7}}>{block.slots*30}min</div>}
+                              <div style={{position:"absolute",bottom:0,left:0,right:0,height:6,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
                                 onMouseDown={e=>{
                                   e.preventDefault(); e.stopPropagation();
                                   const sy=e.clientY,os=block.slots;
@@ -715,7 +711,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                                   const up=()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("mouseup",up);};
                                   window.addEventListener("mousemove",mv);window.addEventListener("mouseup",up);
                                 }}>
-                                <div style={{width:28,height:3,borderRadius:2,background:p?.color,opacity:0.35}}/>
+                                <div style={{width:24,height:2,borderRadius:2,background:p?.color||"#2563EB",opacity:0.35}}/>
                               </div>
                             </div>
                           </td>
@@ -723,7 +719,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                       }
                       return (
                         <td key={day} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();drop(day,si);}} onClick={()=>!inlineEdit&&(setInlineEdit(k),setInlineVal(""))}
-                          style={{border:`1px solid ${isH?"#F3F4F6":"#F9F9F9"}`,background:"#fff",cursor:"pointer",verticalAlign:"top",borderTop:!isH?"1px dashed #F3F4F6":undefined}}>
+                          style={{border:"none",borderTop:isH?"1px solid #D1D5DB":"1px solid #F3F4F6",background:"#fff",cursor:"pointer",verticalAlign:"top",padding:"1px 2px"}}>
                           {isEd&&(
                             <div onClick={e=>e.stopPropagation()} style={{padding:"2px 3px"}}>
                               <input autoFocus value={inlineVal} onChange={e=>setInlineVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveInline(day,si);if(e.key==="Escape")setInlineEdit(null);}} placeholder="Task…" style={{width:"100%",fontSize:10,border:"1px solid #2563EB",borderRadius:3,padding:"2px 4px",outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
