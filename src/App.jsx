@@ -108,7 +108,7 @@ function AnnualScreen({freeform,setFreeform,parsed,setParsed}) {
     setLoading(pid);
     try {
       const p=gp(pid);
-      const raw=await callAI(`Extract tasks from planning notes for "${p.label}" in ${YEAR}. If specific month named use index (0=Jan). If only quarter, set month=-1. Return ONLY JSON array:\n[{"text":"task","month":4,"quarter":"Q2","pid":${pid}}]\nNotes: ${text}`);
+      const raw=await callAI(`Extract tasks from planning notes for "${p.label}" in ${YEAR}.\n\nMONTH INDEX MAPPING (use exactly these numbers):\nJanuary=0, February=1, March=2, April=3, May=4, June=5, July=6, August=7, September=8, October=9, November=10, December=11\n\nQUARTER MAPPING:\nQ1=months 0,1,2 set month=-1 quarter="Q1"\nQ2=months 3,4,5 set month=-1 quarter="Q2"\nQ3=months 6,7,8 set month=-1 quarter="Q3"\nQ4=months 9,10,11 set month=-1 quarter="Q4"\n\nRULES:\n- Specific month named: use exact index above\n- Only quarter mentioned: set month=-1 and fill quarter\n- No time mentioned: set month=-1 and quarter="Q1"\n- Always extract at least one task if there is any content\n\nReturn ONLY a JSON array, no markdown:\n[{"text":"task","month":3,"quarter":"Q2","pid":${pid}}]\n\nNotes: ${text}`);
       const items=JSON.parse(raw.replace(/\`\`\`json|\`\`\`/g,"").trim());
       const n={...parsed,[pid]:items.map(i=>({...i,id:Date.now()+Math.random(),weekAssigned:null,startDay:0,endDay:4}))};
       setParsed(n); cloudSave("annual_parsed",n);
