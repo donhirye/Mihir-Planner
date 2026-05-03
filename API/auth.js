@@ -1,8 +1,8 @@
-const PASSWORD = "133799";
-const TOKEN    = "mp_auth_v1_witronix";
-const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PASSWORD  = "133799";
+const TOKEN     = "mp_auth_v1_witronix";
+const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -18,4 +18,4 @@ export default function handler(req, res) {
   }
 
   return res.status(401).json({ error: "Invalid password" });
-}
+};
