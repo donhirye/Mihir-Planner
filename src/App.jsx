@@ -515,7 +515,11 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
     setImporting(true);
     try {
       const lines = importText.trim().split("\n").filter(l => l.trim() && !l.includes("---") && !l.toLowerCase().includes("day |"));
-      const next = { ...gridBlocks };
+      // Start fresh — only keep manually added blocks, replace all outlook ones
+      const next = {};
+      Object.keys(gridBlocks).forEach(k => {
+        if (gridBlocks[k].source === "manual") next[k] = gridBlocks[k];
+      });
       const dayMap = { "mon":0, "tue":1, "wed":2, "thu":3, "fri":4 };
       lines.forEach(line => {
         // Handle pipe-separated: Mon 5/4 | 11:30 AM | 11:55 AM | Title
@@ -573,7 +577,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       const dateStr = date.toISOString().slice(0,10).replace(/-/g,"");
       for (let si = 0; si < HOURS.length * 2; si++) {
         const b = gridBlocks[ck(day, si)];
-        if (!b || b.source === "outlook") continue;
+        if (!b || b.source !== "manual") continue;
         const startHour = 7 + Math.floor(si / 2);
         const startMin  = (si % 2) * 30;
         const endSi     = si + (b.slots || 1);
@@ -621,6 +625,11 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
         <WNav week={week} setWeek={setWeek}/>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setShowImport(true)} style={{...bd,background:"#0078D4"}}>📥 Import from Copilot</button>
+          <button onClick={()=>{
+            const next={};
+            Object.keys(gridBlocks).forEach(k=>{if(gridBlocks[k].source==="manual")next[k]=gridBlocks[k];});
+            setGridBlocks(next); cloudSave("tt_blocks",next);
+          }} style={{...bd,background:"#6B7280",fontSize:11}}>🗑 Clear Outlook Meetings</button>
           <button onClick={exportICS} style={{...bd,background:"#059669"}}>📤 Export to Outlook (.ics)</button>
           <button onClick={print} style={bd}>⎙ Export for iPad</button>
         </div>
@@ -677,7 +686,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                 const si=(h-7)*2+half, isH=half===0;
                 return (
                   <tr key={`${h}-${half}`} style={{height:CELL_H}}>
-                    <td style={{fontSize:9,color:isH?"#9CA3AF":"#D1D5DB",textAlign:"right",padding:"0 6px",border:"1px solid #F3F4F6",background:"#FAFAF8",whiteSpace:"nowrap",verticalAlign:"top",paddingTop:4}}>
+                    <td style={{fontSize:isH?11:10,fontWeight:isH?700:400,color:isH?"#374151":"#9CA3AF",textAlign:"right",padding:"0 8px",border:"1px solid #F3F4F6",background:"#F5F5F3",whiteSpace:"nowrap",verticalAlign:"top",paddingTop:4}}>
                       {isH?(h<12?`${h}am`:h===12?"12pm":`${h-12}pm`):":30"}
                     </td>
                     {DAYS.map(day=>{
