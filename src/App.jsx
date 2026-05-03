@@ -914,7 +914,7 @@ function LoginScreen({ onLogin }) {
     if (!pw.trim()) return;
     setLoading(true); setError("");
     const h = pw.split("").reduce((a,c)=>((a<<5)-a)+c.charCodeAt(0)|0, 0);
-    if (h === 1955544530) {
+    if (h === 1451501990) {
       saveAuth("mp_auth_v1_witronix", Date.now() + 7*24*60*60*1000);
       onLogin();
     } else {
