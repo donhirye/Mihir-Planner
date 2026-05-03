@@ -1,21 +1,33 @@
-module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+exports.handler = async function(event, context) {
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json"
+  };
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
+  }
+
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
+  }
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "API key not configured" });
+  if (!apiKey) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "API key not configured" }) };
+  }
 
-  let body = req.body;
-  if (typeof body === "string") {
-    try { body = JSON.parse(body); } catch {}
+  let body;
+  try { body = JSON.parse(event.body); } catch {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: "Invalid JSON" }) };
   }
 
   const { prompt } = body || {};
-  if (!prompt) return res.status(400).json({ error: "No prompt provided" });
+  if (!prompt) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: "No prompt provided" }) };
+  }
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -33,8 +45,8 @@ module.exports = async function handler(req, res) {
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content || "";
-    return res.status(200).json({ text });
+    return { statusCode: 200, headers, body: JSON.stringify({ text }) };
   } catch (e) {
-    return res.status(500).json({ error: "AI call failed" });
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "AI call failed: " + e.message }) };
   }
 };

@@ -2,25 +2,33 @@ const PASSWORD  = "133799";
 const TOKEN     = "mp_auth_v1_witronix";
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
-module.exports = async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+exports.handler = async function(event, context) {
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json"
+  };
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
-  let body = req.body;
-  if (typeof body === "string") {
-    try { body = JSON.parse(body); } catch {}
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
   }
 
-  const password = body?.password;
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
+  }
+
+  let body;
+  try { body = JSON.parse(event.body); } catch {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: "Invalid JSON" }) };
+  }
+
+  const { password } = body || {};
 
   if (password === PASSWORD) {
     const expires = Date.now() + EXPIRY_MS;
-    return res.status(200).json({ token: TOKEN, expires });
+    return { statusCode: 200, headers, body: JSON.stringify({ token: TOKEN, expires }) };
   }
 
-  return res.status(401).json({ error: "Invalid password" });
+  return { statusCode: 401, headers, body: JSON.stringify({ error: "Invalid password" }) };
 };
