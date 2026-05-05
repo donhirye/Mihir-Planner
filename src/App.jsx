@@ -1055,6 +1055,14 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
         </div>
       )}
 
+      {(dragTask||dragBlock)&&(
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:"#EFF6FF",border:"1.5px solid #2563EB",borderRadius:8,marginBottom:10,fontSize:14}}>
+          <span style={{color:"#2563EB",fontWeight:700,flex:1}}>
+            {dragTask?`"${dragTask.text}" selected — tap a time slot to place it`:"Block selected — tap a time slot to move it"}
+          </span>
+          <button onClick={()=>{setDragTask(null);setDragBlock(null);}} style={{background:"none",border:"1px solid #2563EB",borderRadius:4,padding:"3px 10px",color:"#2563EB",cursor:"pointer",fontSize:13,fontFamily:"inherit",flexShrink:0}}>✕ Cancel</button>
+        </div>
+      )}
       <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
         {/* ITEM 13+14: Left panel 300px with × delete */}
         <div style={{width:isMobile?"100%":300,flexShrink:0}}>
@@ -1062,7 +1070,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
             THIS WEEK'S TASKS
             <button onClick={()=>{setExtraTasks([]);cloudSave("tt_extra",[]);}} style={{fontSize:14,padding:"2px 6px",background:"#F3F4F6",border:"1px solid #E5E7EB",borderRadius:4,cursor:"pointer",color:"#9CA3AF",fontFamily:"inherit"}}>Clear</button>
           </div>
-          <div style={{fontSize:13,color:"#9CA3AF",marginBottom:8,fontStyle:"italic"}}>Drag onto grid →</div>
+          <div style={{fontSize:13,color:"#9CA3AF",marginBottom:8,fontStyle:"italic"}}>Drag onto grid → &nbsp;·&nbsp; or tap task then tap slot</div>
           {orderedPanel.map((task,idx)=>{
             const p=gp(task.pid), isSched=scheduledIds.includes(task.id), isExtra=!!extraTasks.find(t=>t.id===task.id), isEd=panelEditId===task.id;
             const prioLevel=taskPriorities[task.id]||0;
@@ -1094,7 +1102,8 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                 ):(
                   <span draggable={!isSched} onDragStart={e=>{if(!isSched){e.stopPropagation();setDragTask(task);setDragPanelIdx(null);}}} onDragEnd={()=>setDragTask(null)}
                     onDoubleClick={()=>{if(isExtra){setPanelEditId(task.id);setPanelEditVal(task.text);}}}
-                    style={{fontSize:15,flex:1,lineHeight:1.3,color:isSched?"#9CA3AF":p?.color||"#374151",textDecoration:isSched?"line-through":"none",cursor:isSched?"default":isExtra?"text":"grab",opacity:dragTask?.id===task.id?0.35:1}}>{task.text}</span>
+                    onTouchEnd={e=>{if(!isSched){e.preventDefault();setDragTask(dragTask?.id===task.id?null:task);}}}
+                    style={{fontSize:15,flex:1,lineHeight:1.3,color:isSched?"#9CA3AF":dragTask?.id===task.id?"#2563EB":p?.color||"#374151",textDecoration:isSched?"line-through":"none",fontWeight:dragTask?.id===task.id?800:"inherit",cursor:isSched?"default":isExtra?"text":"grab",opacity:dragTask?.id===task.id?0.7:1}}>{task.text}</span>
                 )}
                 {/* ITEM 13: × delete — hidden when task is scheduled on grid */}
                 {isEd?(
@@ -1159,19 +1168,8 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                           <div key={bk} draggable
                             onDragStart={e=>{e.stopPropagation();const offsetY=e.clientY-e.currentTarget.getBoundingClientRect().top;setDragBlock({key:bk,day,si,offsetY});}}
                             onDragEnd={()=>setDragBlock(null)}
-                            onTouchStart={e=>{e.stopPropagation();const t=e.touches[0];const offsetY=t.clientY-e.currentTarget.getBoundingClientRect().top;setDragBlock({key:bk,day,si,offsetY,touch:true});}}
-                            onTouchMove={e=>{e.preventDefault();}}
-                            onTouchEnd={e=>{
-                              if(!dragBlock?.touch) return;
-                              const t=e.changedTouches[0];
-                              let colEl=document.elementFromPoint(t.clientX,t.clientY);
-                              while(colEl&&!colEl.dataset.day) colEl=colEl.parentElement;
-                              const targetDay=colEl?.dataset?.day||day;
-                              const colDiv=document.querySelector(`[data-day="${targetDay}"]`);
-                              if(colDiv){const rect=colDiv.getBoundingClientRect();const targetSi=Math.max(0,Math.min(HOURS.length*2-1,Math.round((t.clientY-rect.top-(dragBlock.offsetY||0))/CELL_H)));drop(targetDay,targetSi);}
-                              setDragBlock(null);
-                            }}
-                            style={{position:"absolute",top:si*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:bp?.light||"#EFF6FF",border:`1.5px solid ${bp?.color||"#2563EB"}`,borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.4:1,boxSizing:"border-box",touchAction:"none"}}>
+                            onTouchEnd={e=>{e.stopPropagation();setDragBlock(dragBlock?.key===bk?null:{key:bk,day,si,touch:true});}}
+                            style={{position:"absolute",top:si*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:dragBlock?.key===bk?"#DBEAFE":bp?.light||"#EFF6FF",border:`1.5px solid ${dragBlock?.key===bk?"#2563EB":bp?.color||"#2563EB"}`,borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.7:1,boxSizing:"border-box"}}>
                             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
                               <span style={{fontSize:compact?12:14,color:bp?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{blk.text}</span>
                               <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
@@ -1198,8 +1196,8 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                       }
                       return (
                         <div key={si}
-                          onClick={()=>{setPanelEditId(null);!inlineEdit&&(setInlineEdit(k),setInlineVal(""));}}
-                          style={{position:"absolute",top:si*CELL_H,left:0,right:0,height:CELL_H,cursor:"pointer",zIndex:0}}>
+                          onClick={()=>{if(dragTask||dragBlock){drop(day,si);return;}setPanelEditId(null);!inlineEdit&&(setInlineEdit(k),setInlineVal(""));}}
+                          style={{position:"absolute",top:si*CELL_H,left:0,right:0,height:CELL_H,cursor:(dragTask||dragBlock)?"crosshair":"pointer",zIndex:0}}>
                           {isEd&&(
                             <div onClick={e=>e.stopPropagation()} style={{padding:"2px 4px",zIndex:10,position:"relative",background:"#fff"}}>
                               <input autoFocus value={inlineVal} onChange={e=>setInlineVal(e.target.value)}
