@@ -828,6 +828,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const [dragPanelIdx,setDragPanelIdx]=useState(null);
   const [dragOverIdx,setDragOverIdx]=useState(null);
   const wk=WEEK_DATES[week];
+  const compact=isMobile||window.innerWidth<1100;
   const td=mergeTD[wk]||[], bu=(lsGet("merge_bu",{})[wk]||[]).filter(i=>!i.done);
   // ITEM 14: 300px panel width (50% wider)
   const panel=[...td,...bu,...extraTasks];
@@ -1139,7 +1140,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
               <div style={{display:"grid",gridTemplateColumns:"56px repeat(5,1fr)",height:HOURS.length*CELL_H*2}}>
                 <div/>
                 {DAYS.map(day=>(
-                  <div key={day} style={{position:"relative",borderLeft:"1px solid #E5E7EB"}}
+                  <div key={day} data-day={day} style={{position:"relative",borderLeft:"1px solid #E5E7EB"}}
                     onDragOver={e=>e.preventDefault()}
                     onDrop={e=>{e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();const offsetY=dragBlock?.offsetY||0;const si=Math.max(0,Math.min(HOURS.length*2-1,Math.round((e.clientY-rect.top-offsetY)/CELL_H)));drop(day,si);}}>
 
@@ -1158,15 +1159,27 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                           <div key={bk} draggable
                             onDragStart={e=>{e.stopPropagation();const offsetY=e.clientY-e.currentTarget.getBoundingClientRect().top;setDragBlock({key:bk,day,si,offsetY});}}
                             onDragEnd={()=>setDragBlock(null)}
-                            style={{position:"absolute",top:si*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:bp?.light||"#EFF6FF",border:`1.5px solid ${bp?.color||"#2563EB"}`,borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.4:1,boxSizing:"border-box"}}>
+                            onTouchStart={e=>{e.stopPropagation();const t=e.touches[0];const offsetY=t.clientY-e.currentTarget.getBoundingClientRect().top;setDragBlock({key:bk,day,si,offsetY,touch:true});}}
+                            onTouchMove={e=>{e.preventDefault();}}
+                            onTouchEnd={e=>{
+                              if(!dragBlock?.touch) return;
+                              const t=e.changedTouches[0];
+                              let colEl=document.elementFromPoint(t.clientX,t.clientY);
+                              while(colEl&&!colEl.dataset.day) colEl=colEl.parentElement;
+                              const targetDay=colEl?.dataset?.day||day;
+                              const colDiv=document.querySelector(`[data-day="${targetDay}"]`);
+                              if(colDiv){const rect=colDiv.getBoundingClientRect();const targetSi=Math.max(0,Math.min(HOURS.length*2-1,Math.round((t.clientY-rect.top-(dragBlock.offsetY||0))/CELL_H)));drop(targetDay,targetSi);}
+                              setDragBlock(null);
+                            }}
+                            style={{position:"absolute",top:si*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:bp?.light||"#EFF6FF",border:`1.5px solid ${bp?.color||"#2563EB"}`,borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.4:1,boxSizing:"border-box",touchAction:"none"}}>
                             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
-                              <span style={{fontSize:14,color:bp?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{blk.text}</span>
+                              <span style={{fontSize:compact?12:14,color:bp?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{blk.text}</span>
                               <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
                                 {(()=>{const pl=taskPriorities[blk.id]||blk.priority||0;const ps=PRIO_STYLES[pl];return ps?<span style={{fontSize:7,fontWeight:800,color:ps.color,background:ps.bg,border:`1px solid ${ps.color}88`,borderRadius:10,padding:"1px 4px",lineHeight:1}}>{ps.label}</span>:null;})()}
                                 <button onClick={e=>{e.stopPropagation();remBlock(bk);}} style={{background:"none",border:"none",cursor:"pointer",color:bp?.color||"#2563EB",fontSize:14,padding:0,opacity:0.6}}>×</button>
                               </div>
                             </div>
-                            {blk.slots>=2&&<div style={{fontSize:13,color:bp?.color||"#2563EB",opacity:0.7}}>{blk.slots*30}min</div>}
+                            {blk.slots>=2&&<div style={{fontSize:compact?11:13,color:bp?.color||"#2563EB",opacity:0.7}}>{blk.slots*30}min</div>}
                             <div style={{position:"absolute",bottom:0,left:0,right:0,height:6,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
                               onMouseDown={e=>{
                                 e.preventDefault();e.stopPropagation();
@@ -1221,13 +1234,13 @@ const SL=label=>{const p=PRIORITIES.find(p=>p.label===label);return p?.light||"#
 function RetroCard({item,sectionKey,borderColor,editingId,setEditingId,editVal,setEditVal,onSave,onDelete}) {
   const isEd=editingId===item.id;
   return (
-    <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 12px",marginBottom:5,borderRadius:8,background:SL(item.stream),border:`1px solid ${SC(item.stream)}33`}}>
+    <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 12px",marginBottom:5,borderRadius:8,background:"#F9FAFB",border:"1px solid #E5E7EB"}}>
       <span style={{fontSize:12,marginTop:2,color:borderColor,flexShrink:0}}>{borderColor==="#059669"?"✓":borderColor==="#DC2626"?"○":"→"}</span>
       <div style={{flex:1}}>
         {isEd?(
           <div>
             <textarea autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onKeyDown={e=>e.key==="Escape"&&setEditingId(null)}
-              style={{width:"100%",minHeight:70,fontSize:14,padding:"6px 8px",border:`1.5px solid ${SC(item.stream)}`,borderRadius:6,outline:"none",fontFamily:"inherit",boxSizing:"border-box",resize:"vertical",lineHeight:1.6,color:"#374151"}}/>
+              style={{width:"100%",minHeight:70,fontSize:14,padding:"6px 8px",border:`1.5px solid ${borderColor}`,borderRadius:6,outline:"none",fontFamily:"inherit",boxSizing:"border-box",resize:"vertical",lineHeight:1.6,color:"#374151"}}/>
             <div style={{display:"flex",gap:6,marginTop:4}}>
               <button onClick={onSave} style={{...bd,fontSize:14,padding:"3px 10px"}}>Save</button>
               <button onClick={()=>setEditingId(null)} style={{...bg,fontSize:14,padding:"3px 10px"}}>Cancel</button>
@@ -1237,7 +1250,6 @@ function RetroCard({item,sectionKey,borderColor,editingId,setEditingId,editVal,s
           <span onClick={()=>{setEditingId(item.id);setEditVal(item.text);}} style={{fontSize:15,color:"#374151",lineHeight:1.5,cursor:"text",display:"block"}}>{item.text}</span>
         )}
       </div>
-      <span style={{fontSize:14,color:SC(item.stream),background:"#fff",border:`1px solid ${SC(item.stream)}44`,borderRadius:10,padding:"1px 8px",whiteSpace:"nowrap",alignSelf:"flex-start",marginTop:2}}>{item.stream}</span>
       <button onClick={onDelete} style={{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:15,padding:0,lineHeight:1,alignSelf:"flex-start",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#EF4444"} onMouseLeave={e=>e.currentTarget.style.color="#D1D5DB"}>×</button>
     </div>
   );
@@ -1258,7 +1270,7 @@ function RetroScreen({rawNotes,setRawNotes,organized,setOrganized}) {
     const raw=rawNotes[wk]||""; if(!raw.trim()) return;
     setLoading(true);setRetroErr(false);
     try {
-      const resp=await callAI(`Organize weekly notes into retro. Streams: ${PRIORITIES.map(p=>p.label).join(", ")}, Other.\nReturn ONLY JSON:\n{"got_done":[{"text":"item","stream":"Passenger Product"}],"not_done":[{"text":"item","stream":"CDS"}],"lessons":[{"text":"lesson","stream":"Other"}]}\nNotes: ${raw}`);
+      const resp=await callAI(`Organize weekly notes into a retro. Return ONLY JSON:\n{"got_done":[{"text":"item"}],"not_done":[{"text":"item"}],"lessons":[{"text":"lesson"}]}\nNotes: ${raw}`);
       const p=JSON.parse(resp.replace(/```json|```/g,"").trim());
       const ai=arr=>(arr||[]).map(i=>({...i,id:Date.now()+Math.random()}));
       const n={...organized,[wk]:{got_done:ai(p.got_done),not_done:ai(p.not_done),lessons:ai(p.lessons)}};
