@@ -1081,10 +1081,10 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                 style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",marginBottom:3,borderRadius:6,background:isSched?"#F9FAFB":p?.light||"#F0FDF4",border:`1.5px solid ${isDragOver?"#2563EB":isSched?"#E5E7EB":p?.color+"44"||"#D1FAE5"}`,userSelect:"none",boxShadow:isDragOver?"0 0 0 2px #2563EB33":"none",opacity:dragPanelIdx===idx?0.4:1}}>
                 {/* Drag-to-reorder handle */}
                 {!isEd&&<span
-                  onPointerDown={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'reorder',fromIdx:idx};setDragPanelIdx(idx);}}
-                  onPointerMove={e=>{if(ptrDrag.current?.type!=='reorder')return;const els=document.elementsFromPoint(e.clientX,e.clientY);const el=els.find(el=>el.dataset?.panelIdx!=null);if(el)setDragOverIdx(Number(el.dataset.panelIdx));}}
-                  onPointerUp={e=>{if(ptrDrag.current?.type!=='reorder')return;ptrDrag.current=null;reorderPanel(dragPanelIdx,dragOverIdx);setDragPanelIdx(null);setDragOverIdx(null);}}
-                  onPointerCancel={()=>{if(ptrDrag.current?.type==='reorder'){ptrDrag.current=null;setDragPanelIdx(null);setDragOverIdx(null);}}}
+                  onPointerDown={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'reorder',fromIdx:idx};setDragPanelIdx(idx);showGhost(task.text,p?.color,p?.light,e.clientX,e.clientY);}}
+                  onPointerMove={e=>{if(ptrDrag.current?.type!=='reorder')return;moveGhost(e.clientX,e.clientY);const els=document.elementsFromPoint(e.clientX,e.clientY);const el=els.find(el=>el.dataset?.panelIdx!=null);if(el)setDragOverIdx(Number(el.dataset.panelIdx));}}
+                  onPointerUp={e=>{if(ptrDrag.current?.type!=='reorder')return;hideGhost();ptrDrag.current=null;reorderPanel(dragPanelIdx,dragOverIdx);setDragPanelIdx(null);setDragOverIdx(null);}}
+                  onPointerCancel={()=>{if(ptrDrag.current?.type==='reorder'){ptrDrag.current=null;hideGhost();setDragPanelIdx(null);setDragOverIdx(null);}}}
                   title="Drag to reorder"
                   style={{fontSize:12,opacity:0.35,color:p?.color,cursor:"grab",flexShrink:0,touchAction:"none"}}>⠿</span>}
                 {/* Priority badge */}
