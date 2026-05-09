@@ -866,7 +866,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const [dragBlock,setDragBlock]=useState(null);
   const ghostRef=useRef(null);
   const ptrDrag=useRef(null);
-  const showGhost=(text,x,y)=>{const g=ghostRef.current;if(!g)return;g.textContent=text;g.style.left=x+'px';g.style.top=y+'px';g.style.display='block';};
+  const showGhost=(text,color,light,x,y)=>{const g=ghostRef.current;if(!g)return;g.textContent=text;g.style.background=light||'#DBEAFE';g.style.border=`1.5px solid ${color||'#2563EB'}`;g.style.color=color||'#1D4ED8';g.style.left=x+'px';g.style.top=y+'px';g.style.display='block';};
   const moveGhost=(x,y)=>{const g=ghostRef.current;if(g){g.style.left=x+'px';g.style.top=y+'px';}};
   const hideGhost=()=>{if(ghostRef.current)ghostRef.current.style.display='none';};
   const getDaySlot=(x,y)=>{const els=document.elementsFromPoint(x,y);const col=els.find(e=>e.dataset&&e.dataset.day);if(!col)return null;const r=col.getBoundingClientRect();const si=Math.max(0,Math.min(HOURS.length*2-1,Math.floor((y-r.top)/CELL_H)));return{day:col.dataset.day,si};};
@@ -1030,7 +1030,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
 
   return (
     <div>
-      <div ref={ghostRef} style={{position:"fixed",pointerEvents:"none",zIndex:9999,background:"#1D4ED8",color:"#fff",fontSize:13,fontWeight:700,padding:"5px 14px",borderRadius:20,boxShadow:"0 4px 16px rgba(37,99,235,.45)",whiteSpace:"nowrap",transform:"translate(-50%,-130%)",display:"none"}}/>
+      <div ref={ghostRef} style={{position:"fixed",pointerEvents:"none",zIndex:9999,width:140,minHeight:54,borderRadius:5,padding:"7px 9px",boxShadow:"0 6px 22px rgba(0,0,0,0.18)",opacity:0.88,transform:"translate(-50%,-50%) rotate(1.5deg)",display:"none",fontSize:13,fontWeight:700,boxSizing:"border-box"}}/>
       <SecHead title="Hour-by-Hour Timetable" sub="Drag tasks · Resize blocks · Click empty cell to add"/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
         <WNav week={week} setWeek={w=>{setWeek(w);setPanelEditId(null);setPanelEditVal("");setInlineEdit(null);setDragBlock(null);setDragTask(null);}}/>
@@ -1077,16 +1077,16 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
             const isDragOver=dragOverIdx===idx&&dragPanelIdx!==null&&dragPanelIdx!==idx;
             return(
               <div key={task.id}
-                onDragOver={e=>{if(dragPanelIdx!==null){e.preventDefault();setDragOverIdx(idx);}}}
-                onDrop={e=>{if(dragPanelIdx!==null){e.preventDefault();reorderPanel(dragPanelIdx,idx);setDragPanelIdx(null);setDragOverIdx(null);}}}
+                data-panel-idx={idx}
                 style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",marginBottom:3,borderRadius:6,background:isSched?"#F9FAFB":p?.light||"#F0FDF4",border:`1.5px solid ${isDragOver?"#2563EB":isSched?"#E5E7EB":p?.color+"44"||"#D1FAE5"}`,userSelect:"none",boxShadow:isDragOver?"0 0 0 2px #2563EB33":"none",opacity:dragPanelIdx===idx?0.4:1}}>
                 {/* Drag-to-reorder handle */}
                 {!isEd&&<span
-                  draggable
-                  onDragStart={e=>{e.stopPropagation();setDragPanelIdx(idx);setDragTask(null);}}
-                  onDragEnd={()=>{setDragPanelIdx(null);setDragOverIdx(null);}}
+                  onPointerDown={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'reorder',fromIdx:idx};setDragPanelIdx(idx);}}
+                  onPointerMove={e=>{if(ptrDrag.current?.type!=='reorder')return;const els=document.elementsFromPoint(e.clientX,e.clientY);const el=els.find(el=>el.dataset?.panelIdx!=null);if(el)setDragOverIdx(Number(el.dataset.panelIdx));}}
+                  onPointerUp={e=>{if(ptrDrag.current?.type!=='reorder')return;ptrDrag.current=null;reorderPanel(dragPanelIdx,dragOverIdx);setDragPanelIdx(null);setDragOverIdx(null);}}
+                  onPointerCancel={()=>{if(ptrDrag.current?.type==='reorder'){ptrDrag.current=null;setDragPanelIdx(null);setDragOverIdx(null);}}}
                   title="Drag to reorder"
-                  style={{fontSize:12,opacity:0.35,color:p?.color,cursor:"grab",flexShrink:0}}>⠿</span>}
+                  style={{fontSize:12,opacity:0.35,color:p?.color,cursor:"grab",flexShrink:0,touchAction:"none"}}>⠿</span>}
                 {/* Priority badge */}
                 {!isEd&&<button
                   onClick={e=>{e.stopPropagation();cyclePriority(task.id);}}
@@ -1101,7 +1101,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                 ):(
                   <span
                     onDoubleClick={()=>{if(isExtra){setPanelEditId(task.id);setPanelEditVal(task.text);}}}
-                    onPointerDown={e=>{if(isSched||isEd)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'task',task};setDragTask(task);showGhost(task.text,e.clientX,e.clientY);}}
+                    onPointerDown={e=>{if(isSched||isEd)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'task',task};setDragTask(task);showGhost(task.text,p?.color,p?.light,e.clientX,e.clientY);}}
                     onPointerMove={e=>{if(ptrDrag.current?.type!=='task'||ptrDrag.current.task.id!==task.id)return;moveGhost(e.clientX,e.clientY);}}
                     onPointerUp={e=>{if(ptrDrag.current?.type!=='task'||ptrDrag.current.task.id!==task.id)return;hideGhost();ptrDrag.current=null;const hit=getDaySlot(e.clientX,e.clientY);if(hit)drop(hit.day,hit.si);else setDragTask(null);}}
                     onPointerCancel={()=>{if(ptrDrag.current?.type==='task'&&ptrDrag.current.task.id===task.id){ptrDrag.current=null;hideGhost();setDragTask(null);}}}
@@ -1166,7 +1166,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                         const p2=block2?gp(block2.pid):null;
                         const blockEl=(blk,bp,bk,left,right)=>(
                           <div key={bk}
-                            onPointerDown={e=>{if(e.target.closest('button'))return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'block',key:bk};setDragBlock({key:bk,day,si});showGhost(blk.text,e.clientX,e.clientY);}}
+                            onPointerDown={e=>{if(e.target.closest('button'))return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'block',key:bk};setDragBlock({key:bk,day,si});showGhost(blk.text,bp?.color,bp?.light,e.clientX,e.clientY);}}
                             onPointerMove={e=>{if(ptrDrag.current?.key!==bk)return;moveGhost(e.clientX,e.clientY);}}
                             onPointerUp={e=>{if(ptrDrag.current?.key!==bk)return;hideGhost();ptrDrag.current=null;const hit=getDaySlot(e.clientX,e.clientY);if(hit)drop(hit.day,hit.si);else setDragBlock(null);}}
                             onPointerCancel={()=>{if(ptrDrag.current?.key===bk){ptrDrag.current=null;hideGhost();setDragBlock(null);}}}
