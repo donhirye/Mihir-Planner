@@ -894,6 +894,18 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
     rem.forEach((blk,i)=>{n[baseKey+OVERLAP_SFXS[i]]=blk;});
   };
 
+  // If slot si is covered by an earlier block, return that block's base key so
+  // the new meeting is placed as a side-by-side column rather than hidden by occ.
+  const findBaseForSlot=(blocks,day,si)=>{
+    for(let s=si-1;s>=0;s--){
+      for(const sfx of OVERLAP_SFXS){
+        const b=blocks[ck(day,s)+sfx];
+        if(b&&s+b.slots>si)return ck(day,s);
+      }
+    }
+    return ck(day,si);
+  };
+
   const drop=(day,si)=>{
     const k=ck(day,si);
     if(dragBlock){
@@ -904,13 +916,15 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       const srcBase=dragBlock.key.replace(/__\d+$/,'');
       delete n[dragBlock.key];
       _compactSlot(n,srcBase);
-      const targetK=OVERLAP_SFXS.map(s=>k+s).find(key=>!n[key]);
+      const targetBase=findBaseForSlot(n,day,si);
+      const targetK=OVERLAP_SFXS.map(s=>targetBase+s).find(key=>!n[key]);
       if(!targetK){setDragBlock(null);return;}
       n[targetK]={...block};
       setGridBlocks(n);cloudSave("tt_blocks",n);setDragBlock(null);return;
     }
     if(!dragTask) return;
-    const targetKey=OVERLAP_SFXS.map(s=>k+s).find(key=>!gridBlocks[key]);
+    const baseK=findBaseForSlot(gridBlocks,day,si);
+    const targetKey=OVERLAP_SFXS.map(s=>baseK+s).find(key=>!gridBlocks[key]);
     if(!targetKey) return;
     const n={...gridBlocks,[targetKey]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2,source:"manual",priority:taskPriorities[dragTask.id]||0}};
     setGridBlocks(n);cloudSave("tt_blocks",n);
@@ -995,7 +1009,8 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       if(items.length===0){setImporting(false);setImportErr(true);return;}
       const next={};
       Object.keys(gridBlocks).forEach(k=>{if(gridBlocks[k].source==="manual")next[k]=gridBlocks[k];});
-      items.forEach(item=>{const k=ck(item.day,item.slotIndex);const targetK=OVERLAP_SFXS.map(s=>k+s).find(key=>!next[key]);if(targetK)next[targetK]={text:item.text,pid:1,id:Date.now()+Math.random(),slots:Math.max(1,item.slots||1),source:"outlook"};});
+      items.sort((a,b)=>DAYS.indexOf(a.day)-DAYS.indexOf(b.day)||a.slotIndex-b.slotIndex);
+      items.forEach(item=>{const baseK=findBaseForSlot(next,item.day,item.slotIndex);const targetK=OVERLAP_SFXS.map(s=>baseK+s).find(key=>!next[key]);if(targetK)next[targetK]={text:item.text,pid:1,id:Date.now()+Math.random(),slots:Math.max(1,item.slots||1),source:"outlook"};});
       setGridBlocks(next);cloudSave("tt_blocks",next);
       const remainingIds=Object.values(next).filter(b=>b.source==="manual").map(b=>b.id);
       const newSched=scheduledIds.filter(id=>remainingIds.includes(id));
