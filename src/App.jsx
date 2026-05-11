@@ -18,11 +18,27 @@ const HOURS      = Array.from({length:13},(_,i)=>i+7);
 const YEAR       = 2026;
 const QUARTERS   = ["Q1","Q2","Q3","Q4"];
 const Q_MONTHS   = {Q1:[0,1,2],Q2:[3,4,5],Q3:[6,7,8],Q4:[9,10,11]};
-const WEEK_DATES = ["May 4","May 11","May 18","May 25","Jun 1"];
+const _buildWeekDates = () => {
+  const today = new Date();
+  const dow = today.getDay();
+  const mon = new Date(today);
+  mon.setDate(today.getDate() + (dow === 0 ? 1 : 1 - dow));
+  mon.setHours(0,0,0,0);
+  const dates = [];
+  for (let i = -4; i < 12; i++) {
+    const w = new Date(mon);
+    w.setDate(mon.getDate() + i * 7);
+    dates.push(`${MONTHS[w.getMonth()]} ${w.getDate()}`);
+  }
+  return dates;
+};
+const WEEK_DATES       = _buildWeekDates();
+const CURRENT_WEEK_IDX = 4;
 const NAV        = ["Annual","Quarterly","Weekly Merge","Timetable","Retro"];
 const ICONS      = ["◈","⊞","⇄","⏱","✦"];
-const DAY_W      = 38;
-const CELL_H     = 26;
+const DAY_W        = 38;
+const CELL_H       = 26;
+const OVERLAP_SFXS = ['','__2','__3','__4','__5'];
 
 const gp = id => PRIORITIES.find(p=>p.id===id) || PRIORITIES[6];
 
@@ -667,7 +683,7 @@ function QuarterlyScreen({parsed,setParsed,mergeTD,setMergeTD}) {
 
 // ── ITEMS 10-11: Weekly Merge ──────────────────────────────────────────────────
 function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuRaw,isMobile}) {
-  const [week,setWeek]=useState(0);
+  const [week,setWeek]=useState(CURRENT_WEEK_IDX);
   const [aiLoad,setAiLoad]=useState(false);
   const [newText,setNewText]=useState("");
   const [newPid,setNewPid]=useState(1);
@@ -815,8 +831,8 @@ function WeeklyMergeScreen({mergeTD,setMergeTD,bottomUp,setBottomUp,buRaw,setBuR
 }
 
 // ── ITEMS 12-14: Timetable — ALL original functionality preserved ──────────────
-function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTasks,scheduledIds,setScheduledIds,isMobile}) {
-  const [week,setWeek]=useState(0);
+function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTasks,scheduledIds,setScheduledIds,isMobile,ttHidden,setTtHidden}) {
+  const [week,setWeek]=useState(CURRENT_WEEK_IDX);
   const [dragTask,setDragTask]=useState(null);
   const [newExtra,setNewExtra]=useState("");
   const [inlineEdit,setInlineEdit]=useState(null);
@@ -830,8 +846,9 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const wk=WEEK_DATES[week];
   const compact=isMobile||window.innerWidth<1100;
   const td=mergeTD[wk]||[], bu=(lsGet("merge_bu",{})[wk]||[]).filter(i=>!i.done);
+  const _hiddenIds=new Set(ttHidden[wk]||[]);
   // ITEM 14: 300px panel width (50% wider)
-  const panel=[...td,...bu,...extraTasks];
+  const panel=[...td,...bu,...extraTasks].filter(t=>!_hiddenIds.has(t.id));
   const orderedPanel=useMemo(()=>{
     if(!panelOrder) return panel;
     return [...panel].sort((a,b)=>{
@@ -871,6 +888,12 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const hideGhost=()=>{if(ghostRef.current)ghostRef.current.style.display='none';};
   const getDaySlot=(x,y)=>{const els=document.elementsFromPoint(x,y);const col=els.find(e=>e.dataset&&e.dataset.day);if(!col)return null;const r=col.getBoundingClientRect();const si=Math.max(0,Math.min(HOURS.length*2-1,Math.floor((y-r.top)/CELL_H)));return{day:col.dataset.day,si};};
 
+  const _compactSlot=(n,baseKey)=>{
+    const rem=OVERLAP_SFXS.map(s=>n[baseKey+s]).filter(Boolean);
+    OVERLAP_SFXS.forEach(s=>delete n[baseKey+s]);
+    rem.forEach((blk,i)=>{n[baseKey+OVERLAP_SFXS[i]]=blk;});
+  };
+
   const drop=(day,si)=>{
     const k=ck(day,si);
     if(dragBlock){
@@ -878,18 +901,17 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       const block=gridBlocks[dragBlock.key];
       if(!block){setDragBlock(null);return;}
       const n={...gridBlocks};
-      const isSecondary=dragBlock.key.endsWith('__2');
+      const srcBase=dragBlock.key.replace(/__\d+$/,'');
       delete n[dragBlock.key];
-      if(!isSecondary&&n[dragBlock.key+'__2']){n[dragBlock.key]=n[dragBlock.key+'__2'];delete n[dragBlock.key+'__2'];}
-      const targetK=n[k]?k+'__2':k;
-      if(n[targetK]){setDragBlock(null);return;}
+      _compactSlot(n,srcBase);
+      const targetK=OVERLAP_SFXS.map(s=>k+s).find(key=>!n[key]);
+      if(!targetK){setDragBlock(null);return;}
       n[targetK]={...block};
       setGridBlocks(n);cloudSave("tt_blocks",n);setDragBlock(null);return;
     }
     if(!dragTask) return;
-    const k2=k+'__2';
-    const targetKey=gridBlocks[k]?k2:k;
-    if(gridBlocks[targetKey]) return;
+    const targetKey=OVERLAP_SFXS.map(s=>k+s).find(key=>!gridBlocks[key]);
+    if(!targetKey) return;
     const n={...gridBlocks,[targetKey]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2,source:"manual",priority:taskPriorities[dragTask.id]||0}};
     setGridBlocks(n);cloudSave("tt_blocks",n);
     const s=[...new Set([...scheduledIds,dragTask.id])];setScheduledIds(s);cloudSave("tt_scheduled_ids",s);
@@ -897,23 +919,24 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   };
 
   const remBlock=k=>{
-    const isSecondary=k.endsWith('__2');
-    const primaryKey=isSecondary?k.replace('__2',''):k;
+    const baseKey=k.replace(/__\d+$/,'');
     const b=gridBlocks[k];
     if(b){
-      const otherKey=isSecondary?primaryKey:k+'__2';
-      const otherBlock=gridBlocks[otherKey];
-      if(!otherBlock||otherBlock.id!==b.id){const s=scheduledIds.filter(id=>id!==b.id);setScheduledIds(s);cloudSave("tt_scheduled_ids",s);}
+      const otherExists=OVERLAP_SFXS.some(s=>{const ok=baseKey+s;return ok!==k&&gridBlocks[ok]?.id===b.id;});
+      if(!otherExists){const s=scheduledIds.filter(id=>id!==b.id);setScheduledIds(s);cloudSave("tt_scheduled_ids",s);}
     }
     const n={...gridBlocks};
-    if(!isSecondary&&n[k+'__2']){n[k]=n[k+'__2'];delete n[k+'__2'];}
-    else{delete n[k];}
+    delete n[k];
+    _compactSlot(n,baseKey);
     setGridBlocks(n);cloudSave("tt_blocks",n);
   };
 
   const saveInline=(day,si)=>{
     if(!inlineVal.trim()){setInlineEdit(null);return;}
-    const k=ck(day,si),n={...gridBlocks,[k]:{text:inlineVal,pid:1,id:Date.now(),slots:2,source:"manual"}};
+    const k=ck(day,si);
+    const targetK=OVERLAP_SFXS.map(s=>k+s).find(key=>!gridBlocks[key]);
+    if(!targetK){setInlineEdit(null);return;}
+    const n={...gridBlocks,[targetK]:{text:inlineVal,pid:1,id:Date.now(),slots:2,source:"manual"}};
     setGridBlocks(n);cloudSave("tt_blocks",n);setInlineEdit(null);setInlineVal("");
   };
 
@@ -969,10 +992,10 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
           items=JSON.parse(resp.replace(/```json|```/g,"").trim());
         } catch(e){console.warn("AI fallback failed",e);}
       }
-      if(items.length===0){setImporting(false);return;}
+      if(items.length===0){setImporting(false);setImportErr(true);return;}
       const next={};
       Object.keys(gridBlocks).forEach(k=>{if(gridBlocks[k].source==="manual")next[k]=gridBlocks[k];});
-      items.forEach(item=>{const k=ck(item.day,item.slotIndex);next[k]={text:item.text,pid:1,id:Date.now()+Math.random(),slots:Math.max(1,item.slots||1),source:"outlook"};});
+      items.forEach(item=>{const k=ck(item.day,item.slotIndex);const targetK=OVERLAP_SFXS.map(s=>k+s).find(key=>!next[key]);if(targetK)next[targetK]={text:item.text,pid:1,id:Date.now()+Math.random(),slots:Math.max(1,item.slots||1),source:"outlook"};});
       setGridBlocks(next);cloudSave("tt_blocks",next);
       const remainingIds=Object.values(next).filter(b=>b.source==="manual").map(b=>b.id);
       const newSched=scheduledIds.filter(id=>remainingIds.includes(id));
@@ -985,8 +1008,8 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   // ITEM 12: Export ICS
   const exportICS=()=>{
     const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Mihir Planner//EN","CALSCALE:GREGORIAN"];
-    const weekIdx=WEEK_DATES.indexOf(wk);
-    const baseDate=new Date(2026,4,4+weekIdx*7);
+    const [wkMon,wkDay]=wk.split(' ');
+    const baseDate=new Date(YEAR,MONTHS.indexOf(wkMon),parseInt(wkDay));
     DAYS.forEach((day,di)=>{
       const date=new Date(baseDate);date.setDate(baseDate.getDate()+di);
       const dateStr=date.toISOString().slice(0,10).replace(/-/g,"");
@@ -1024,8 +1047,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
 
   const occ={};
   DAYS.forEach(day=>{for(let si=0;si<HOURS.length*2;si++){
-    const b=gridBlocks[ck(day,si)];if(b)for(let s=1;s<b.slots;s++)occ[`${day}-${si+s}`]=si;
-    const b2=gridBlocks[ck(day,si)+'__2'];if(b2)for(let s=1;s<b2.slots;s++)occ[`${day}-${si+s}`]=si;
+    OVERLAP_SFXS.forEach(sfx=>{const b=gridBlocks[ck(day,si)+sfx];if(b)for(let s=1;s<b.slots;s++)occ[`${day}-${si+s}`]=si;});
   }});
 
   return (
@@ -1049,7 +1071,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
             Ask Copilot: <em>"List all my calendar meetings for this week. For each: day, start time, end time, and title only."</em> Then paste below.
           </div>
           <textarea value={importText} onChange={e=>setImportText(e.target.value)}
-            placeholder={"Paste Copilot calendar output here…\n\nMon 5/4  11:30 AM  11:55 AM  Fleet level AI powered insights\n…"}
+            placeholder={"Paste calendar data here. Two formats supported:\n\nPipe:  Mon 5/11 | 8:00 AM | 9:00 AM | Meeting title\nSpace: Mon 5/11  8:00 AM  9:00 AM  Meeting title"}
             style={{width:"100%",minHeight:160,fontSize:14,border:"1.5px solid #93C5FD",borderRadius:8,padding:"10px 12px",resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box",color:"#374151",lineHeight:1.6}}/>
           <div style={{display:"flex",gap:8,marginTop:10,alignItems:"center"}}>
             <button onClick={()=>{setImportErr(false);importFromCopilot();}} disabled={importing}
@@ -1057,7 +1079,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
               {importing?"⏳ Importing…":"📥 Place on Timetable"}
             </button>
             <button onClick={()=>{setShowImport(false);setImportText("");setImportErr(false);}} style={bg}>Cancel</button>
-            {importErr&&!importing&&<span style={{fontSize:14,color:"#EF4444"}}>Import failed. Check format and try again.</span>}
+            {importErr&&!importing&&<span style={{fontSize:14,color:"#EF4444"}}>Could not parse any meetings. Use: <em>Mon 5/11 | 8:00 AM | 9:00 AM | Meeting title</em></span>}
           </div>
         </div>
       )}
@@ -1116,6 +1138,9 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                     if(isExtra){
                       const n=extraTasks.filter(t=>t.id!==task.id);
                       setExtraTasks(n);cloudSave("tt_extra",n);
+                    } else {
+                      const n={...ttHidden,[wk]:[...(ttHidden[wk]||[]),task.id]};
+                      setTtHidden(n);cloudSave("tt_hidden",n);
                     }
                   }}
                     style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:14,padding:0,lineHeight:1,flexShrink:0}}>×</button>
@@ -1161,24 +1186,21 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                       const isEd=inlineEdit===k;
                       if(occBy!==undefined) return null;
                       if(block){
-                        const p=gp(block.pid);
-                        const block2=gridBlocks[k+'__2'];
-                        const p2=block2?gp(block2.pid):null;
                         const blockEl=(blk,bp,bk,left,right)=>(
                           <div key={bk}
                             onPointerDown={e=>{if(e.target.closest('button'))return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);ptrDrag.current={type:'block',key:bk};setDragBlock({key:bk,day,si});showGhost(blk.text,bp?.color,bp?.light,e.clientX,e.clientY);}}
                             onPointerMove={e=>{if(ptrDrag.current?.key!==bk)return;moveGhost(e.clientX,e.clientY);}}
                             onPointerUp={e=>{if(ptrDrag.current?.key!==bk)return;hideGhost();ptrDrag.current=null;const hit=getDaySlot(e.clientX,e.clientY);if(hit)drop(hit.day,hit.si);else setDragBlock(null);}}
                             onPointerCancel={()=>{if(ptrDrag.current?.key===bk){ptrDrag.current=null;hideGhost();setDragBlock(null);}}}
-                            style={{position:"absolute",top:si*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:bp?.light||"#EFF6FF",border:`1.5px solid ${bp?.color||"#2563EB"}`,borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.4:1,boxSizing:"border-box",touchAction:"none"}}>
+                            style={{position:"absolute",top:si*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:"#FEE2E2",border:"1.5px solid #FCA5A5",borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.4:1,boxSizing:"border-box",touchAction:"none"}}>
                             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
-                              <span style={{fontSize:compact?12:14,color:bp?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{blk.text}</span>
+                              <span style={{fontSize:compact?12:14,color:"#111827",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{blk.text}</span>
                               <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
                                 {(()=>{const pl=taskPriorities[blk.id]||blk.priority||0;const ps=PRIO_STYLES[pl];return ps?<span style={{fontSize:7,fontWeight:800,color:ps.color,background:ps.bg,border:`1px solid ${ps.color}88`,borderRadius:10,padding:"1px 4px",lineHeight:1}}>{ps.label}</span>:null;})()}
-                                <button onClick={e=>{e.stopPropagation();remBlock(bk);}} style={{background:"none",border:"none",cursor:"pointer",color:bp?.color||"#2563EB",fontSize:14,padding:0,opacity:0.6}}>×</button>
+                                <button onClick={e=>{e.stopPropagation();remBlock(bk);}} style={{background:"none",border:"none",cursor:"pointer",color:"#111827",fontSize:14,padding:0,opacity:0.6}}>×</button>
                               </div>
                             </div>
-                            {blk.slots>=2&&<div style={{fontSize:compact?11:13,color:bp?.color||"#2563EB",opacity:0.7}}>{blk.slots*30}min</div>}
+                            {blk.slots>=2&&<div style={{fontSize:compact?11:13,color:"#111827",opacity:0.6}}>{blk.slots*30}min</div>}
                             <div style={{position:"absolute",bottom:0,left:0,right:0,height:6,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
                               onPointerDown={e=>{
                                 e.preventDefault();e.stopPropagation();
@@ -1187,12 +1209,14 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                                 const up=()=>{window.removeEventListener("pointermove",mv);window.removeEventListener("pointerup",up);};
                                 window.addEventListener("pointermove",mv);window.addEventListener("pointerup",up);
                               }}>
-                              <div style={{width:24,height:2,borderRadius:2,background:bp?.color||"#2563EB",opacity:0.35}}/>
+                              <div style={{width:24,height:2,borderRadius:2,background:"#111827",opacity:0.25}}/>
                             </div>
                           </div>
                         );
+                        const slotBlocks=OVERLAP_SFXS.map(sfx=>({bk:k+sfx,blk:gridBlocks[k+sfx],bp:gp(gridBlocks[k+sfx]?.pid)})).filter(({blk})=>blk);
+                        const N=slotBlocks.length, pct=100/N;
                         return (
-                          <Fragment key={si}>{blockEl(block,p,k,2,block2?"50%":2)}{block2&&blockEl(block2,p2,k+'__2',"50%",2)}</Fragment>
+                          <Fragment key={si}>{slotBlocks.map(({bk,blk,bp},idx)=>blockEl(blk,bp,bk,`${idx*pct}%`,`${(N-1-idx)*pct}%`))}</Fragment>
                         );
                       }
                       return (
@@ -1255,7 +1279,7 @@ function RetroCard({item,sectionKey,borderColor,editingId,setEditingId,editVal,s
 }
 
 function RetroScreen({rawNotes,setRawNotes,organized,setOrganized}) {
-  const [week,setWeek]=useState(0);
+  const [week,setWeek]=useState(CURRENT_WEEK_IDX);
   const [loading,setLoading]=useState(false);
   const [retroErr,setRetroErr]=useState(false);
   const [editingId,setEditingId]=useState(null);
@@ -1365,7 +1389,7 @@ function LoginScreen({onLogin}) {
   };
 
   return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:"#F8F7F5",fontFamily:"'Georgia','Times New Roman',serif"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:"#F8F7F5",fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif"}}>
       <div style={{background:"#fff",border:"1.5px solid #E5E7EB",borderRadius:16,padding:"48px 40px",width:360,boxShadow:"0 4px 24px rgba(0,0,0,0.06)"}}>
         <div style={{marginBottom:32,textAlign:"center"}}>
           <div style={{fontSize:14,letterSpacing:"0.2em",color:"#6B7280",textTransform:"uppercase",marginBottom:8}}>Wi-Tronix</div>
@@ -1407,6 +1431,7 @@ export default function App() {
   const [gridBlocks,setGridBlocks]=useState(()=>lsGet("tt_blocks",{}));
   const [extraTasks,setExtraTasks]=useState(()=>lsGet("tt_extra",[]));
   const [scheduledIds,setScheduledIds]=useState(()=>lsGet("tt_scheduled_ids",[]));
+  const [ttHidden,setTtHidden]=useState(()=>lsGet("tt_hidden",{}));
   const [rawNotes,setRawNotes]=useState(()=>lsGet("retro_raw",{}));
   const [organized,setOrganized]=useState(()=>lsGet("retro_org",{}));
   const [syncing,setSyncing]=useState(true);
@@ -1416,10 +1441,11 @@ export default function App() {
       cloudLoad("annual_freeform",{}),cloudLoad("annual_parsed",{}),cloudLoad("merge_td",{}),
       cloudLoad("merge_bu",{}),cloudLoad("merge_bu_raw",{}),cloudLoad("tt_blocks",{}),
       cloudLoad("tt_extra",[]),cloudLoad("tt_scheduled_ids",[]),cloudLoad("retro_raw",{}),cloudLoad("retro_org",{}),
-      cloudLoad("cal_bars",{}),
-    ]).then(([ff,pd,mt,bu,br,gb,et,si,rn,og,cb])=>{
+      cloudLoad("cal_bars",{}),cloudLoad("tt_hidden",{}),
+    ]).then(([ff,pd,mt,bu,br,gb,et,si,rn,og,cb,th])=>{
       setFreeform(ff);setParsed(pd);setMergeTD(mt);setBottomUp(bu);setBuRaw(br);
       setGridBlocks(gb);setExtraTasks(et);setScheduledIds(si);setRawNotes(rn);setOrganized(og);
+      setTtHidden(th);
       // cal_bars lives in QuarterlyScreen local state — persist via lsSet so lsGet picks it up on next render
       lsSet("cal_bars",cb);
       setSyncing(false);
@@ -1432,12 +1458,12 @@ export default function App() {
     <AnnualScreen key="a" freeform={freeform} setFreeform={setFreeform} parsed={parsed} setParsed={setParsed}/>,
     <QuarterlyScreen key="q" parsed={parsed} setParsed={setParsed} mergeTD={mergeTD} setMergeTD={setMergeTD}/>,
     <WeeklyMergeScreen key="w" mergeTD={mergeTD} setMergeTD={setMergeTD} bottomUp={bottomUp} setBottomUp={setBottomUp} buRaw={buRaw} setBuRaw={setBuRaw} isMobile={isMobile}/>,
-    <TimetableScreen key="t" mergeTD={mergeTD} gridBlocks={gridBlocks} setGridBlocks={setGridBlocks} extraTasks={extraTasks} setExtraTasks={setExtraTasks} scheduledIds={scheduledIds} setScheduledIds={setScheduledIds} isMobile={isMobile}/>,
+    <TimetableScreen key="t" mergeTD={mergeTD} gridBlocks={gridBlocks} setGridBlocks={setGridBlocks} extraTasks={extraTasks} setExtraTasks={setExtraTasks} scheduledIds={scheduledIds} setScheduledIds={setScheduledIds} isMobile={isMobile} ttHidden={ttHidden} setTtHidden={setTtHidden}/>,
     <RetroScreen key="r" rawNotes={rawNotes} setRawNotes={setRawNotes} organized={organized} setOrganized={setOrganized}/>,
   ];
 
   return (
-    <div style={{fontFamily:"'Georgia','Times New Roman',serif",background:"#F8F7F5",minHeight:"100vh",display:"flex",flexDirection:isMobile?"column":"row"}}>
+    <div style={{fontFamily:"'Segoe UI',system-ui,-apple-system,sans-serif",background:"#F8F7F5",minHeight:"100vh",display:"flex",flexDirection:isMobile?"column":"row"}}>
       {isMobile&&(
         <div style={{background:"#111827",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
           <div>
