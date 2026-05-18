@@ -1081,6 +1081,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
         <WNav week={week} setWeek={w=>{setWeek(w);setPanelEditId(null);setPanelEditVal("");setInlineEdit(null);setDragBlock(null);setDragTask(null);}}/>
         {/* ITEM 12: All 3 buttons preserved */}
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button onClick={()=>undoRef.current()} style={{...bd,background:"#6B7280",opacity:undoStack.current.length?1:0.4,cursor:undoStack.current.length?"pointer":"default"}} title="Undo (⌘Z)">⎌ Undo</button>
           <button onClick={()=>setShowImport(true)} style={{...bd,background:"#0078D4"}}>📥 Import from Copilot</button>
           <button onClick={exportICS} style={{...bd,background:"#059669"}}>📤 Export to Outlook (.ics)</button>
           <button onClick={print} style={bd}>⎙ Export for iPad</button>
