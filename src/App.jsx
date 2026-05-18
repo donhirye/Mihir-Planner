@@ -1079,11 +1079,13 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       <div ref={ghostRef} style={{position:"fixed",pointerEvents:"none",zIndex:9999,width:140,minHeight:54,borderRadius:5,padding:"7px 9px",boxShadow:"0 6px 22px rgba(0,0,0,0.18)",opacity:0.88,transform:"translate(-50%,-50%) rotate(1.5deg)",display:"none",fontSize:13,fontWeight:700,boxSizing:"border-box"}}/>
       <SecHead title="Hour-by-Hour Timetable" sub="Drag tasks · Resize blocks · Click empty cell to add"/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
-        <WNav week={week} setWeek={w=>{setWeek(w);setPanelEditId(null);setPanelEditVal("");setInlineEdit(null);setDragBlock(null);setDragTask(null);}}/>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <WNav week={week} setWeek={w=>{setWeek(w);setPanelEditId(null);setPanelEditVal("");setInlineEdit(null);setDragBlock(null);setDragTask(null);}}/>
+          <button onClick={()=>undoRef.current()} style={{...bd,background:undoCount?"#374151":"#9CA3AF",cursor:undoCount?"pointer":"default",fontSize:14,padding:"7px 14px",fontWeight:800}} title="Undo (⌘Z)">⎌ Undo{undoCount>0?` (${undoCount})`:""}</button>
+        </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={()=>setShowImport(true)} style={{...bd,background:"#0078D4"}}>📥 Import from Copilot</button>
           <button onClick={exportICS} style={{...bd,background:"#059669"}}>📤 Export to Outlook (.ics)</button>
-          <button onClick={()=>undoRef.current()} style={{...bd,background:undoCount?"#374151":"#9CA3AF",cursor:undoCount?"pointer":"default",fontSize:15,padding:"8px 18px",fontWeight:800}} title="Undo (⌘Z)">⎌ Undo{undoCount>0?` (${undoCount})`:""}</button>
         </div>
       </div>
 
