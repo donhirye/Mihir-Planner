@@ -883,6 +883,11 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const [dragBlock,setDragBlock]=useState(null);
   const ghostRef=useRef(null);
   const ptrDrag=useRef(null);
+  const undoStack=useRef([]);
+  const undoRef=useRef(null);
+  const pushUndo=()=>{undoStack.current.unshift({gb:{...gridBlocks},si:[...scheduledIds]});if(undoStack.current.length>20)undoStack.current.length=20;};
+  undoRef.current=()=>{if(!undoStack.current.length)return;const p=undoStack.current.shift();setGridBlocks(p.gb);cloudSave("tt_blocks",p.gb);setScheduledIds(p.si);cloudSave("tt_scheduled_ids",p.si);};
+  useEffect(()=>{const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){e.preventDefault();undoRef.current();}};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[]);
   const showGhost=(text,color,light,x,y)=>{const g=ghostRef.current;if(!g)return;g.textContent=text;g.style.background=light||'#DBEAFE';g.style.border=`1.5px solid ${color||'#2563EB'}`;g.style.color=color||'#1D4ED8';g.style.left=x+'px';g.style.top=y+'px';g.style.display='block';};
   const moveGhost=(x,y)=>{const g=ghostRef.current;if(g){g.style.left=x+'px';g.style.top=y+'px';}};
   const hideGhost=()=>{if(ghostRef.current)ghostRef.current.style.display='none';};
@@ -912,6 +917,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       if(dragBlock.key===k){setDragBlock(null);return;}
       const block=gridBlocks[dragBlock.key];
       if(!block){setDragBlock(null);return;}
+      pushUndo();
       const n={...gridBlocks};
       const srcBase=dragBlock.key.replace(/__\d+$/,'');
       delete n[dragBlock.key];
@@ -919,20 +925,22 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
       const targetBase=findBaseForSlot(n,day,si);
       const targetK=OVERLAP_SFXS.map(s=>targetBase+s).find(key=>!n[key]);
       if(!targetK){setDragBlock(null);return;}
-      n[targetK]={...block};
+      n[targetK]={...block,dropSi:si};
       setGridBlocks(n);cloudSave("tt_blocks",n);setDragBlock(null);return;
     }
     if(!dragTask) return;
+    pushUndo();
     const baseK=findBaseForSlot(gridBlocks,day,si);
     const targetKey=OVERLAP_SFXS.map(s=>baseK+s).find(key=>!gridBlocks[key]);
     if(!targetKey) return;
-    const n={...gridBlocks,[targetKey]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2,source:"manual",priority:taskPriorities[dragTask.id]||0}};
+    const n={...gridBlocks,[targetKey]:{text:dragTask.text,pid:dragTask.pid,id:dragTask.id,slots:2,source:"manual",priority:taskPriorities[dragTask.id]||0,dropSi:si}};
     setGridBlocks(n);cloudSave("tt_blocks",n);
     const s=[...new Set([...scheduledIds,dragTask.id])];setScheduledIds(s);cloudSave("tt_scheduled_ids",s);
     setDragTask(null);
   };
 
   const remBlock=k=>{
+    pushUndo();
     const baseKey=k.replace(/__\d+$/,'');
     const b=gridBlocks[k];
     if(b){
@@ -1207,24 +1215,24 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
                             onPointerMove={e=>{if(ptrDrag.current?.key!==bk)return;moveGhost(e.clientX,e.clientY);}}
                             onPointerUp={e=>{if(ptrDrag.current?.key!==bk)return;hideGhost();ptrDrag.current=null;const hit=getDaySlot(e.clientX,e.clientY);if(hit)drop(hit.day,hit.si);else setDragBlock(null);}}
                             onPointerCancel={()=>{if(ptrDrag.current?.key===bk){ptrDrag.current=null;hideGhost();setDragBlock(null);}}}
-                            style={{position:"absolute",top:si*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:"#FEE2E2",border:"1.5px solid #FCA5A5",borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.4:1,boxSizing:"border-box",touchAction:"none"}}>
+                            style={{position:"absolute",top:(blk.dropSi??si)*CELL_H+2,left,right,height:blk.slots*CELL_H-4,background:bp?.light||"#EFF6FF",border:`1.5px solid ${bp?.color||"#2563EB"}`,borderRadius:4,padding:"3px 6px",cursor:"grab",zIndex:3,display:"flex",flexDirection:"column",justifyContent:"space-between",overflow:"hidden",opacity:dragBlock?.key===bk?0.4:1,boxSizing:"border-box",touchAction:"none"}}>
                             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:4}}>
-                              <span style={{fontSize:compact?12:14,color:"#111827",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{blk.text}</span>
+                              <span style={{fontSize:compact?12:14,color:bp?.color||"#2563EB",fontWeight:700,lineHeight:1.3,flex:1,overflow:"hidden"}}>{blk.text}</span>
                               <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
                                 {(()=>{const pl=taskPriorities[blk.id]||blk.priority||0;const ps=PRIO_STYLES[pl];return ps?<span style={{fontSize:7,fontWeight:800,color:ps.color,background:ps.bg,border:`1px solid ${ps.color}88`,borderRadius:10,padding:"1px 4px",lineHeight:1}}>{ps.label}</span>:null;})()}
                                 <button onClick={e=>{e.stopPropagation();remBlock(bk);}} style={{background:"none",border:"none",cursor:"pointer",color:"#111827",fontSize:14,padding:0,opacity:0.6}}>×</button>
                               </div>
                             </div>
-                            {blk.slots>=2&&<div style={{fontSize:compact?11:13,color:"#111827",opacity:0.6}}>{blk.slots*30}min</div>}
+                            {blk.slots>=2&&<div style={{fontSize:compact?11:13,color:bp?.color||"#2563EB",opacity:0.7}}>{blk.slots*30}min</div>}
                             <div style={{position:"absolute",bottom:0,left:0,right:0,height:6,cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center"}}
                               onPointerDown={e=>{
-                                e.preventDefault();e.stopPropagation();
+                                e.preventDefault();e.stopPropagation();pushUndo();
                                 const sy=e.clientY,os=blk.slots;
                                 const mv=mv2=>{const ns=Math.max(1,Math.min(16,os+Math.round((mv2.clientY-sy)/CELL_H)));const n={...gridBlocks,[bk]:{...blk,slots:ns}};setGridBlocks(n);cloudSave("tt_blocks",n);};
                                 const up=()=>{window.removeEventListener("pointermove",mv);window.removeEventListener("pointerup",up);};
                                 window.addEventListener("pointermove",mv);window.addEventListener("pointerup",up);
                               }}>
-                              <div style={{width:24,height:2,borderRadius:2,background:"#111827",opacity:0.25}}/>
+                              <div style={{width:24,height:2,borderRadius:2,background:bp?.color||"#2563EB",opacity:0.35}}/>
                             </div>
                           </div>
                         );
