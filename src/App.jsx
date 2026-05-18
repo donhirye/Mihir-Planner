@@ -885,8 +885,9 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
   const ptrDrag=useRef(null);
   const undoStack=useRef([]);
   const undoRef=useRef(null);
-  const pushUndo=()=>{undoStack.current.unshift({gb:{...gridBlocks},si:[...scheduledIds]});if(undoStack.current.length>20)undoStack.current.length=20;};
-  undoRef.current=()=>{if(!undoStack.current.length)return;const p=undoStack.current.shift();setGridBlocks(p.gb);cloudSave("tt_blocks",p.gb);setScheduledIds(p.si);cloudSave("tt_scheduled_ids",p.si);};
+  const [undoCount,setUndoCount]=useState(0);
+  const pushUndo=()=>{undoStack.current.unshift({gb:{...gridBlocks},si:[...scheduledIds]});if(undoStack.current.length>20)undoStack.current.length=20;setUndoCount(undoStack.current.length);};
+  undoRef.current=()=>{if(!undoStack.current.length)return;const p=undoStack.current.shift();setGridBlocks(p.gb);cloudSave("tt_blocks",p.gb);setScheduledIds(p.si);cloudSave("tt_scheduled_ids",p.si);setUndoCount(undoStack.current.length);};
   useEffect(()=>{const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){e.preventDefault();undoRef.current();}};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[]);
   const showGhost=(text,color,light,x,y)=>{const g=ghostRef.current;if(!g)return;g.textContent=text;g.style.background=light||'#DBEAFE';g.style.border=`1.5px solid ${color||'#2563EB'}`;g.style.color=color||'#1D4ED8';g.style.left=x+'px';g.style.top=y+'px';g.style.display='block';};
   const moveGhost=(x,y)=>{const g=ghostRef.current;if(g){g.style.left=x+'px';g.style.top=y+'px';}};
@@ -1081,7 +1082,7 @@ function TimetableScreen({mergeTD,gridBlocks,setGridBlocks,extraTasks,setExtraTa
         <WNav week={week} setWeek={w=>{setWeek(w);setPanelEditId(null);setPanelEditVal("");setInlineEdit(null);setDragBlock(null);setDragTask(null);}}/>
         {/* ITEM 12: All 3 buttons preserved */}
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <button onClick={()=>undoRef.current()} style={{...bd,background:"#6B7280",opacity:undoStack.current.length?1:0.4,cursor:undoStack.current.length?"pointer":"default"}} title="Undo (⌘Z)">⎌ Undo</button>
+          <button onClick={()=>undoRef.current()} style={{...bd,background:undoCount?"#374151":"#9CA3AF",cursor:undoCount?"pointer":"default",fontSize:15,padding:"8px 18px",fontWeight:800}} title="Undo (⌘Z)">⎌ Undo{undoCount>0?` (${undoCount})`:""}</button>
           <button onClick={()=>setShowImport(true)} style={{...bd,background:"#0078D4"}}>📥 Import from Copilot</button>
           <button onClick={exportICS} style={{...bd,background:"#059669"}}>📤 Export to Outlook (.ics)</button>
           <button onClick={print} style={bd}>⎙ Export for iPad</button>
